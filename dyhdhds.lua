@@ -1887,7 +1887,7 @@ Create("TextLabel", {
     Size = UDim2.new(0.6, 0, 1, 0),
     Position = UDim2.new(0, 8, 0, 0),
     Font = Enum.Font.GothamBold,
-    Text = "Platform [Z]",
+    Text = "Platform [R]",
     TextColor3 = Color3.fromRGB(255, 220, 180),
     TextSize = FONT_TOGGLE,
     TextXAlignment = Enum.TextXAlignment.Left,
