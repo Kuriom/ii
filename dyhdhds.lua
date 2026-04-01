@@ -1,4 +1,3 @@
-
 local CoreGui = game:GetService("CoreGui")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -52,6 +51,9 @@ local Enabled = {
     BatAimbot         = false,
     PlatformZ         = false,
     ESP               = false,
+    ZombieAnim        = false,
+    PixelSkin         = false,
+    ShowSpeedText     = false,
 }
 
 local Values = {
@@ -73,6 +75,7 @@ local Values = {
     ESPColorG            = 0,
     ESPColorB            = 0,
     ESPTransparency      = 0.5,
+    -- Цвета убраны, везде используется красный (255,0,0)
 }
 
 -- Default keybinds
@@ -225,6 +228,230 @@ local function refreshESP()
             h.FillTransparency = Values.ESPTransparency
         end
     end
+end
+
+-- ============================================================
+-- NEW: ZOMBIE ANIMATION (фикс для R15, анимация R15)
+-- ============================================================
+local zombieAnimTrack = nil
+local function startZombieAnim()
+    local char = Player.Character
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+    if zombieAnimTrack then zombieAnimTrack:Stop() zombieAnimTrack = nil end
+    -- Используем анимацию зомби для R15 (работает и на R6)
+    local animId = "rbxassetid://10865517612" -- зомби-походка R15
+    local anim = Instance.new("Animation")
+    anim.AnimationId = animId
+    zombieAnimTrack = hum:LoadAnimation(anim)
+    local moveConn
+    local function updateAnim()
+        if not Enabled.ZombieAnim then
+            if zombieAnimTrack then zombieAnimTrack:Stop() end
+            if moveConn then moveConn:Disconnect() moveConn = nil end
+            return
+        end
+        local isMoving = (hum.MoveDirection.Magnitude > 0.1)
+        if isMoving then
+            if not zombieAnimTrack.IsPlaying then
+                zombieAnimTrack:Play()
+                zombieAnimTrack.TimePosition = 0
+            end
+        else
+            if zombieAnimTrack.IsPlaying then
+                zombieAnimTrack:Stop()
+            end
+        end
+    end
+    moveConn = RunService.Heartbeat:Connect(updateAnim)
+    Connections.zombieAnim = moveConn
+    updateAnim()
+end
+
+local function stopZombieAnim()
+    if zombieAnimTrack then zombieAnimTrack:Stop() end
+    if Connections.zombieAnim then Connections.zombieAnim:Disconnect() Connections.zombieAnim = nil end
+end
+
+-- ============================================================
+-- NEW: PIXEL SKIN (фиксированный красный цвет)
+-- ============================================================
+local originalMaterials = {}
+local function pixelatePlayer(player)
+    local char = player.Character
+    if not char then return end
+    for _, part in ipairs(char:GetDescendants()) do
+        if part:IsA("BasePart") or part:IsA("MeshPart") then
+            if not originalMaterials[part] then
+                originalMaterials[part] = {
+                    Material = part.Material,
+                    Color = part.Color,
+                    TextureID = part:IsA("MeshPart") and part.TextureID or nil,
+                }
+            end
+            part.Material = Enum.Material.Plastic
+            part.Color = Color3.fromRGB(255, 0, 0) -- всегда красный
+            if part:IsA("MeshPart") then
+                part.TextureID = ""
+            end
+        end
+    end
+end
+
+local function restorePlayerSkin(player)
+    local char = player.Character
+    if not char then return end
+    for _, part in ipairs(char:GetDescendants()) do
+        if (part:IsA("BasePart") or part:IsA("MeshPart")) and originalMaterials[part] then
+            local orig = originalMaterials[part]
+            part.Material = orig.Material
+            part.Color = orig.Color
+            if part:IsA("MeshPart") and orig.TextureID then
+                part.TextureID = orig.TextureID
+            end
+            originalMaterials[part] = nil
+        end
+    end
+end
+
+local function applyPixelToAll()
+    if not Enabled.PixelSkin then
+        for _, p in ipairs(Players:GetPlayers()) do
+            restorePlayerSkin(p)
+        end
+        return
+    end
+    for _, p in ipairs(Players:GetPlayers()) do
+        pixelatePlayer(p)
+    end
+end
+
+local function startPixelSkin()
+    if Connections.pixelSkin then return end
+    applyPixelToAll()
+    Connections.pixelSkin = Players.PlayerAdded:Connect(function(p)
+        if Enabled.PixelSkin then
+            p.CharacterAdded:Connect(function()
+                if Enabled.PixelSkin then pixelatePlayer(p) end
+            end)
+            if p.Character then pixelatePlayer(p) end
+        end
+    end)
+    for _, p in ipairs(Players:GetPlayers()) do
+        p.CharacterAdded:Connect(function()
+            if Enabled.PixelSkin then pixelatePlayer(p) end
+        end)
+    end
+end
+
+local function stopPixelSkin()
+    if Connections.pixelSkin then Connections.pixelSkin:Disconnect() Connections.pixelSkin = nil end
+    for _, p in ipairs(Players:GetPlayers()) do
+        restorePlayerSkin(p)
+    end
+end
+
+-- ============================================================
+-- NEW: SPEED TEXT ABOVE HEAD (фиксированный красный, без тряски)
+-- ============================================================
+local speedLabels = {}
+local lastSpeedUpdate = 0
+local UPDATE_INTERVAL = 0.1 -- обновление текста каждые 0.1 секунды
+
+local function createSpeedLabel(player)
+    if speedLabels[player] then return end
+    local char = player.Character
+    if not char then return end
+    local head = char:FindFirstChild("Head")
+    if not head then return end
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "SpeedLabel"
+    billboard.Adornee = head
+    billboard.Size = UDim2.new(0, 120, 0, 30)
+    billboard.StudsOffset = Vector3.new(0, 2.2, 0) -- подняли выше головы для стабильности
+    billboard.AlwaysOnTop = true
+    billboard.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Size = UDim2.new(1, 0, 1, 0)
+    textLabel.BackgroundTransparency = 1
+    textLabel.Font = Enum.Font.GothamBold
+    textLabel.TextColor3 = Color3.fromRGB(255, 0, 0) -- всегда красный
+    textLabel.TextStrokeTransparency = 0.5
+    textLabel.TextStrokeColor3 = Color3.new(0,0,0)
+    textLabel.TextSize = 14
+    textLabel.Text = "SPEED: 0"
+    textLabel.Parent = billboard
+    billboard.Parent = head
+    speedLabels[player] = {
+        Billboard = billboard,
+        Label = textLabel
+    }
+end
+
+local function removeSpeedLabel(player)
+    local data = speedLabels[player]
+    if data then
+        if data.Billboard then data.Billboard:Destroy() end
+        speedLabels[player] = nil
+    end
+end
+
+local function updateAllSpeedLabels()
+    if not Enabled.ShowSpeedText then
+        for p, data in pairs(speedLabels) do
+            if data.Billboard then data.Billboard:Destroy() end
+        end
+        speedLabels = {}
+        return
+    end
+    local now = tick()
+    if now - lastSpeedUpdate < UPDATE_INTERVAL then return end
+    lastSpeedUpdate = now
+    for _, p in ipairs(Players:GetPlayers()) do
+        local char = p.Character
+        if char then
+            local root = char:FindFirstChild("HumanoidRootPart")
+            if root then
+                local vel = root.AssemblyLinearVelocity
+                local speed = math.floor((vel.X^2 + vel.Z^2)^0.5)
+                if not speedLabels[p] then
+                    createSpeedLabel(p)
+                end
+                if speedLabels[p] and speedLabels[p].Label then
+                    speedLabels[p].Label.Text = "SPEED: " .. tostring(speed)
+                end
+            else
+                if speedLabels[p] then removeSpeedLabel(p) end
+            end
+        else
+            if speedLabels[p] then removeSpeedLabel(p) end
+        end
+    end
+end
+
+local function startSpeedText()
+    if Connections.speedText then return end
+    Connections.speedText = RunService.Heartbeat:Connect(updateAllSpeedLabels)
+    local function onPlayerAdded(p)
+        p.CharacterAdded:Connect(function()
+            if Enabled.ShowSpeedText then
+                updateAllSpeedLabels()
+            end
+        end)
+    end
+    for _, p in ipairs(Players:GetPlayers()) do onPlayerAdded(p) end
+    Connections.speedTextPlayerAdded = Players.PlayerAdded:Connect(onPlayerAdded)
+    updateAllSpeedLabels()
+end
+
+local function stopSpeedText()
+    if Connections.speedText then Connections.speedText:Disconnect() Connections.speedText = nil end
+    if Connections.speedTextPlayerAdded then Connections.speedTextPlayerAdded:Disconnect() Connections.speedTextPlayerAdded = nil end
+    for p, data in pairs(speedLabels) do
+        if data.Billboard then data.Billboard:Destroy() end
+    end
+    speedLabels = {}
 end
 
 -- ============================================================
@@ -1806,7 +2033,7 @@ local function CreateSlider(parent, labelText, minVal, maxVal, valueKey, callbac
     return container
 end
 
--- NEW: Bind button
+-- Bind button
 local function CreateBindButton(parent, label, bindKey, order)
     local row = Create("Frame", {
         BackgroundColor3 = Color3.fromRGB(22, 9, 2),
@@ -1878,7 +2105,7 @@ local function CreateBindButton(parent, label, bindKey, order)
     return row
 end
 
--- PROGRESS BAR (unchanged)
+-- PROGRESS BAR
 local pbar = Instance.new("Frame")
 pbar.Size = UDim2.new(0, PBAR_W, 0, 44)
 pbar.Position = UDim2.new(0.5, -PBAR_W/2, 1, -110)
@@ -2092,6 +2319,24 @@ CreateToggle(ScrollFrame, "Optimizer + XRay", "OptimizerXRay", function(s)
     if s then enableOptimizer() enableXRay() else disableOptimizer() disableXRay() end
 end, order) order += 1
 
+-- CUSTOM SECTION (без настроек цвета)
+CreateSection(ScrollFrame, "🎭  CUSTOM", order) order += 1
+
+CreateToggle(ScrollFrame, "🧟 Zombie Walk (R15)", "ZombieAnim", function(s)
+    Enabled.ZombieAnim = s
+    if s then startZombieAnim() else stopZombieAnim() end
+end, order) order += 1
+
+CreateToggle(ScrollFrame, "🎨 Pixel Skin (Red)", "PixelSkin", function(s)
+    Enabled.PixelSkin = s
+    if s then startPixelSkin() else stopPixelSkin() end
+end, order) order += 1
+
+CreateToggle(ScrollFrame, "📊 Speed Above Head (Red)", "ShowSpeedText", function(s)
+    Enabled.ShowSpeedText = s
+    if s then startSpeedText() else stopSpeedText() end
+end, order) order += 1
+
 -- ESP SECTION
 CreateSection(ScrollFrame, "👁️  ESP (Chams)", order) order += 1
 
@@ -2131,7 +2376,7 @@ CreateBindButton(ScrollFrame, "Bat Aimbot", "BATAIMBOT", order) order += 1
 CreateBindButton(ScrollFrame, "Platform Z", "PLATFORM", order) order += 1
 
 -- ============================================================
--- PLATFORM Z SIDE PANEL (unchanged except saveConfig)
+-- PLATFORM Z SIDE PANEL
 -- ============================================================
 local pOrder = 1
 
@@ -2566,6 +2811,9 @@ for key, val in pairs(Enabled) do
     end
 end
 refreshESP()
+if Enabled.PixelSkin then startPixelSkin() end
+if Enabled.ShowSpeedText then startSpeedText() end
+if Enabled.ZombieAnim then startZombieAnim() end
 
 -- Start features that are already enabled
 if Enabled.SpeedBoost then startSpeedBoost() end
@@ -2666,5 +2914,8 @@ Player.CharacterAdded:Connect(function()
     if Enabled.Helicopter then startHelicopter() end
     if Enabled.BatAimbot then stopBatAimbot() task.wait(0.1) startBatAimbot() end
     if Enabled.ESP then startESP() end
+    if Enabled.PixelSkin then pixelatePlayer(Player) end
+    if Enabled.ZombieAnim then startZombieAnim() end
+    if Enabled.ShowSpeedText then updateAllSpeedLabels() end
     if platIsOn then createPlatformZ() end
 end)
