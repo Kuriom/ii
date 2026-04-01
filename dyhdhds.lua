@@ -71,7 +71,7 @@ local KEYBINDS = {
     AUTORIGHT = Enum.KeyCode.E,
     AUTOLEFT  = Enum.KeyCode.Q,
     BATAIMBOT = Enum.KeyCode.X,
-    PLATFORM  = Enum.KeyCode.Z,
+    PLATFORM  = Enum.KeyCode.R,
 }
 
 local Connections   = {}
@@ -160,7 +160,8 @@ local function stopSpeedWhileStealing()
 end
 
 -- ============================================================
--- ANTI RAGDOLL (v2) — FIXED: no velocity boost when GalaxyMode active
+-- ANTI RAGDOLL (v2) — FIXED: no velocity boost when GalaxyMode active,
+-- and preserve vertical velocity during jump when both GalaxyMode and AntiRagdoll are on
 -- ============================================================
 local antiRagdollMode = nil
 local ragdollConnections = {}
@@ -220,11 +221,17 @@ local function arForceExit()
     end
     cachedCharData.root.Anchored = false
 
-    -- FIX: сбрасываем вертикальную скорость чтобы не улетать вверх
-    pcall(function()
-        local vel = cachedCharData.root.AssemblyLinearVelocity
-        cachedCharData.root.AssemblyLinearVelocity = Vector3.new(vel.X, 0, vel.Z)
-    end)
+    -- ИСПРАВЛЕНИЕ: не обнуляем вертикальную скорость, если игрок прыгает или активно поднимается
+    local humState = cachedCharData.humanoid:GetState()
+    local isJumping = (humState == Enum.HumanoidStateType.Jumping)
+    local vel = cachedCharData.root.AssemblyLinearVelocity
+    local isAscending = (vel.Y > 1) -- порог, чтобы не обнулять при активном подъёме
+
+    if not isJumping and not isAscending then
+        pcall(function()
+            cachedCharData.root.AssemblyLinearVelocity = Vector3.new(vel.X, 0, vel.Z)
+        end)
+    end
 end
 
 local function arHeartbeatLoop()
