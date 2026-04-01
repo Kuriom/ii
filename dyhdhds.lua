@@ -2288,6 +2288,17 @@ floatBtnUpdateAimbot = CreateFloatingButton(
     end
 )
 
+floatBtnUpdateAimbot = CreateFloatingButton(
+    "plot [R]", "🕸",
+    UDim2.new(1, -144, 0.5, 62),
+    "BatAimbot",
+    function(state)
+        Enabled.BatAimbot = state
+        if VisualSetters.BatAimbot then VisualSetters.BatAimbot(state, true) end
+        if state then startBatAimbot() else stopBatAimbot() end
+    end
+)
+
 -- ============================================================
 -- KEYBINDS & CHARACTER RESPAWN
 -- ============================================================
