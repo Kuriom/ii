@@ -1,5 +1,3 @@
--- ⚡ ASIX ⚡
--- Pink Edition - Vertical Single Column UI
 
 local CoreGui = game:GetService("CoreGui")
 local Players = game:GetService("Players")
@@ -10,6 +8,14 @@ local Lighting = game:GetService("Lighting")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
 local Player = Players.LocalPlayer
+
+-- ============================================================
+-- KEY CHECK (global variable _G.ASIX_KEY must be "67")
+-- ============================================================
+if getgenv().ASIX_KEY ~= "67" then
+    warn("Invalid key. Use: _G.ASIX_KEY = '67' before loading the script.")
+    return
+end
 
 -- ============================================================
 -- SERVICES & SAFE CHARACTER WAIT
@@ -45,6 +51,7 @@ local Enabled = {
     GalaxyMode        = false,
     BatAimbot         = false,
     PlatformZ         = false,
+    ESP               = false,
 }
 
 local Values = {
@@ -58,14 +65,18 @@ local Values = {
     HOP_POWER            = 35,
     HOP_COOLDOWN         = 0.08,
     BatAimbotSpeed       = 55,
-    -- Platform Z
     PlatformWidth        = 20,
     PlatformDepth        = 20,
     PlatformThickness    = 1,
     PlatformHeightOffset = -3,
+    ESPColorR            = 255,
+    ESPColorG            = 0,
+    ESPColorB            = 0,
+    ESPTransparency      = 0.5,
 }
 
-local KEYBINDS = {
+-- Default keybinds
+local DefaultKeybinds = {
     SPEED     = Enum.KeyCode.V,
     FLOAT     = Enum.KeyCode.F,
     AUTORIGHT = Enum.KeyCode.E,
@@ -74,13 +85,171 @@ local KEYBINDS = {
     PLATFORM  = Enum.KeyCode.R,
 }
 
+-- Current keybinds (will be loaded from config)
+local Keybinds = {}
+for k, v in pairs(DefaultKeybinds) do
+    Keybinds[k] = v
+end
+
 local Connections   = {}
 local isStealing    = false
 local lastBatSwing  = 0
 local BAT_SWING_COOLDOWN = 0.12
 
 -- ============================================================
--- HELPERS
+-- CONFIG SAVING / LOADING
+-- ============================================================
+local CONFIG_FILE = "AsixConfig.json"
+
+local function saveConfig()
+    local keybindsStr = {}
+    for k, v in pairs(Keybinds) do
+        keybindsStr[k] = tostring(v):gsub("Enum.KeyCode.", "")
+    end
+    local config = {
+        Enabled = Enabled,
+        Values = Values,
+        Keybinds = keybindsStr
+    }
+    local json = HttpService:JSONEncode(config)
+    pcall(function()
+        writefile(CONFIG_FILE, json)
+    end)
+end
+
+local function loadConfig()
+    local success, data = pcall(function()
+        return readfile(CONFIG_FILE)
+    end)
+    if success and data then
+        local ok, decoded = pcall(function()
+            return HttpService:JSONDecode(data)
+        end)
+        if ok and decoded then
+            for k, v in pairs(decoded.Enabled or {}) do
+                if Enabled[k] ~= nil then Enabled[k] = v end
+            end
+            for k, v in pairs(decoded.Values or {}) do
+                if Values[k] ~= nil then Values[k] = v end
+            end
+            for k, v in pairs(decoded.Keybinds or {}) do
+                local enum = Enum.KeyCode[v]
+                if enum then
+                    Keybinds[k] = enum
+                end
+            end
+        end
+    end
+    for k, v in pairs(DefaultKeybinds) do
+        if Keybinds[k] == nil then
+            Keybinds[k] = v
+        end
+    end
+end
+
+-- ============================================================
+-- ESP (CHAMS) SYSTEM
+-- ============================================================
+local activeHighlights = {}
+
+local function createHighlight(player)
+    if not player.Character then return end
+    local highlight = Instance.new("Highlight")
+    highlight.FillColor = Color3.fromRGB(Values.ESPColorR, Values.ESPColorG, Values.ESPColorB)
+    highlight.FillTransparency = Values.ESPTransparency
+    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+    highlight.OutlineTransparency = 0.3
+    highlight.Parent = player.Character
+    activeHighlights[player] = highlight
+end
+
+local function removeHighlight(player)
+    local h = activeHighlights[player]
+    if h then h:Destroy() end
+    activeHighlights[player] = nil
+end
+
+local function updateESP()
+    if not Enabled.ESP then
+        for player, h in pairs(activeHighlights) do
+            h:Destroy()
+        end
+        activeHighlights = {}
+        return
+    end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= Player then
+            if p.Character and not activeHighlights[p] then
+                createHighlight(p)
+            elseif not p.Character and activeHighlights[p] then
+                removeHighlight(p)
+            end
+        end
+    end
+    for p in pairs(activeHighlights) do
+        if not p.Parent or p == Player then
+            removeHighlight(p)
+        end
+    end
+end
+
+local function startESP()
+    if Connections.esp then return end
+    updateESP()
+    Connections.esp = Players.PlayerAdded:Connect(function(p)
+        if Enabled.ESP and p ~= Player then
+            p.CharacterAdded:Connect(function()
+                if Enabled.ESP and p ~= Player then
+                    createHighlight(p)
+                end
+            end)
+            if p.Character then createHighlight(p) end
+        end
+    end)
+    Players.PlayerRemoving:Connect(function(p)
+        removeHighlight(p)
+    end)
+end
+
+local function stopESP()
+    if Connections.esp then Connections.esp:Disconnect() Connections.esp = nil end
+    for _, h in pairs(activeHighlights) do h:Destroy() end
+    activeHighlights = {}
+end
+
+local function refreshESP()
+    if not Enabled.ESP then return end
+    for _, h in pairs(activeHighlights) do
+        if h then
+            h.FillColor = Color3.fromRGB(Values.ESPColorR, Values.ESPColorG, Values.ESPColorB)
+            h.FillTransparency = Values.ESPTransparency
+        end
+    end
+end
+
+-- ============================================================
+-- HELPER: Ragdoll check (for Galaxy)
+-- ============================================================
+local function isPlayerRagdolled()
+    local char = Player.Character
+    if not char then return false end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return false end
+    local state = hum:GetState()
+    if state == Enum.HumanoidStateType.Physics or
+       state == Enum.HumanoidStateType.Ragdoll or
+       state == Enum.HumanoidStateType.FallingDown then
+        return true
+    end
+    local endTime = Player:GetAttribute("RagdollEndTime")
+    if endTime and (endTime - workspace:GetServerTimeNow()) > 0 then
+        return true
+    end
+    return false
+end
+
+-- ============================================================
+-- FEATURE FUNCTIONS (unchanged from original)
 -- ============================================================
 local function getMovementDirection()
     local c = Player.Character
@@ -114,10 +283,6 @@ local function findBat()
     end
     return nil
 end
-
--- ============================================================
--- FEATURE LOGIC
--- ============================================================
 
 -- Speed Boost
 local function startSpeedBoost()
@@ -159,10 +324,7 @@ local function stopSpeedWhileStealing()
     if Connections.speedWhileStealing then Connections.speedWhileStealing:Disconnect() Connections.speedWhileStealing = nil end
 end
 
--- ============================================================
--- ANTI RAGDOLL (v2) — FIXED: no velocity boost when GalaxyMode active,
--- and preserve vertical velocity during jump when both GalaxyMode and AntiRagdoll are on
--- ============================================================
+-- Anti Ragdoll (v2)
 local antiRagdollMode = nil
 local ragdollConnections = {}
 local cachedCharData = {}
@@ -209,8 +371,6 @@ local function arForceExit()
         end
     end
 
-    -- FIX: если GalaxyMode активен — не применяем скоростной буст 400,
-    -- так как он взаимодействует с антигравитационной силой и заставляет игрока улетать вверх
     if not Enabled.GalaxyMode and not isBoosting then
         isBoosting = true
         cachedCharData.humanoid.WalkSpeed = AR_BOOST_SPEED
@@ -221,11 +381,10 @@ local function arForceExit()
     end
     cachedCharData.root.Anchored = false
 
-    -- ИСПРАВЛЕНИЕ: не обнуляем вертикальную скорость, если игрок прыгает или активно поднимается
     local humState = cachedCharData.humanoid:GetState()
     local isJumping = (humState == Enum.HumanoidStateType.Jumping)
     local vel = cachedCharData.root.AssemblyLinearVelocity
-    local isAscending = (vel.Y > 1) -- порог, чтобы не обнулять при активном подъёме
+    local isAscending = (vel.Y > 1)
 
     if not isJumping and not isAscending then
         pcall(function()
@@ -508,9 +667,7 @@ local function stopBatAimbot()
     end
 end
 
--- ============================================================
--- GALAXY MODE
--- ============================================================
+-- Galaxy Mode
 local galaxyModeEnabled = false
 local galaxyHopsEnabled = false
 local galaxyLastHopTime = 0
@@ -547,10 +704,18 @@ local function galaxySetupForce()
         galaxyVectorForce.Parent = h
     end)
 end
+
 local function galaxyUpdateForce()
     if not galaxyModeEnabled or not galaxyVectorForce then return end
+
+    if isPlayerRagdolled() then
+        galaxyVectorForce.Force = Vector3.zero
+        return
+    end
+
     local c = Player.Character
     if not c then return end
+
     local mass = 0
     for _, p in ipairs(c:GetDescendants()) do
         if p:IsA("BasePart") then mass += p:GetMass() end
@@ -558,17 +723,24 @@ local function galaxyUpdateForce()
     local tg = Values.DEFAULT_GRAVITY * (Values.GalaxyGravityPercent / 100)
     galaxyVectorForce.Force = Vector3.new(0, mass * (Values.DEFAULT_GRAVITY - tg) * 0.95, 0)
 end
+
 local function galaxyAdjustJump()
     pcall(function()
         local c = Player.Character
         if not c then return end
         local hum = c:FindFirstChildOfClass("Humanoid")
         if not hum then return end
-        if not galaxyModeEnabled then hum.JumpPower = galaxyOriginalJump return end
+
+        if not galaxyModeEnabled or isPlayerRagdolled() then
+            hum.JumpPower = galaxyOriginalJump
+            return
+        end
+
         local ratio = math.sqrt((Values.DEFAULT_GRAVITY * (Values.GalaxyGravityPercent / 100)) / Values.DEFAULT_GRAVITY)
         hum.JumpPower = galaxyOriginalJump * ratio
     end)
 end
+
 local function galaxyDoMiniHop()
     if not galaxyHopsEnabled then return end
     pcall(function()
@@ -584,12 +756,14 @@ local function galaxyDoMiniHop()
         end
     end)
 end
+
 local function startGalaxyMode()
     galaxyModeEnabled = true
     galaxyHopsEnabled = true
     galaxySetupForce()
     galaxyAdjustJump()
 end
+
 local function stopGalaxyMode()
     galaxyModeEnabled = false
     galaxyHopsEnabled = false
@@ -613,9 +787,7 @@ Player.CharacterAdded:Connect(function()
     if galaxyModeEnabled then galaxySetupForce() galaxyAdjustJump() end
 end)
 
--- ============================================================
--- PLATFORM Z
--- ============================================================
+-- Platform Z
 local platformPart = nil
 
 local function createPlatformZ()
@@ -663,9 +835,7 @@ local function togglePlatformZ(state)
     end
 end
 
--- ============================================================
--- OPTIMIZER + XRAY
--- ============================================================
+-- Optimizer + XRay
 local originalTransparency = {}
 local function enableOptimizer()
     if getgenv and getgenv().OPTIMIZER_ACTIVE then return end
@@ -710,13 +880,10 @@ local function disableXRay()
     originalTransparency = {}
 end
 
--- ============================================================
--- PINK MOON (Vibrance)
--- ============================================================
+-- Pink Moon (Vibrance)
 local pinkMoonCC       = nil
 local pinkMoonBloom    = nil
 local pinkMoonConn     = nil
-local pinkMoonSky      = nil
 local pinkMoonFOV      = nil
 local pinkMoonBall     = nil
 
@@ -752,6 +919,14 @@ local function enablePinkMoon()
     pinkMoonBall.Position     = Vector3.new(0, 800, -500)
     pinkMoonBall.Parent       = workspace
 
+    local screenGui = CoreGui:FindFirstChild("Asix")
+    if not screenGui then
+        screenGui = Instance.new("ScreenGui")
+        screenGui.Name = "Asix"
+        screenGui.ResetOnSpawn = false
+        screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        screenGui.Parent = CoreGui
+    end
     pinkMoonFOV = Instance.new("ImageLabel")
     pinkMoonFOV.Name               = "PinkMoonFOV"
     pinkMoonFOV.Size               = UDim2.new(1, 0, 1, 0)
@@ -761,7 +936,7 @@ local function enablePinkMoon()
     pinkMoonFOV.ImageColor3        = Color3.fromRGB(255, 120, 0)
     pinkMoonFOV.ImageTransparency  = 0.55
     pinkMoonFOV.ZIndex             = 1
-    pinkMoonFOV.Parent             = ScreenGui
+    pinkMoonFOV.Parent             = screenGui
 
     pinkMoonConn = RunService.Heartbeat:Connect(function()
         if not Enabled.Vibrance then return end
@@ -798,9 +973,7 @@ local function disablePinkMoon()
     Lighting.OutdoorAmbient = Color3.fromRGB(128, 128, 128)
 end
 
--- ============================================================
--- AUTO STEAL
--- ============================================================
+-- Auto Steal
 local StealData = {}
 local stealStartTime = nil
 local progressConnection = nil
@@ -925,9 +1098,7 @@ local function stopAutoSteal()
     ResetProgressBar()
 end
 
--- ============================================================
--- STEAL PATHS
--- ============================================================
+-- Steal Paths
 local stealPathActive = false
 local stealLastFlatVel = Vector3.zero
 local STEAL_PATH_VELOCITY_SPEED  = 59.2
@@ -1009,7 +1180,7 @@ local function stopStealPath()
 end
 
 -- ============================================================
--- UI CONSTRUCTION
+-- UI CONSTRUCTION (without password)
 -- ============================================================
 if CoreGui:FindFirstChild("Asix") then
     CoreGui.Asix:Destroy()
@@ -1043,7 +1214,6 @@ local TOGGLE_H2    = 16
 local DOT_S        = 11
 local PBAR_W       = 310
 local PBAR_H       = 38
--- Platform side tab
 local SIDE_TAB_W   = 220
 local SIDE_TAB_H   = 260
 
@@ -1054,7 +1224,7 @@ local function Create(className, properties, children)
     return inst
 end
 
--- ── MAIN CONTAINER ─────────────────────────────────────────
+-- MAIN CONTAINER (visible immediately)
 local MainContainer = Create("Frame", {
     Name = "MainContainer",
     BackgroundTransparency = 1,
@@ -1063,7 +1233,7 @@ local MainContainer = Create("Frame", {
     Parent = ScreenGui
 })
 
--- ── SINGLE PANEL ───────────────────────────────────────────
+-- SINGLE PANEL
 local PanelFrame = Create("Frame", {
     Name = "PanelFrame",
     BackgroundColor3 = BG_DARK,
@@ -1119,11 +1289,7 @@ for i = 1, 18 do
     end)
 end
 
--- ============================================================
--- PLATFORM Z SIDE TAB PANEL (справа от основного панела)
--- ============================================================
-local PlatformTabVisible = false
-
+-- Platform Z side panel (unchanged)
 local PlatformPanel = Create("Frame", {
     Name = "PlatformPanel",
     BackgroundColor3 = BG_DARK,
@@ -1139,7 +1305,6 @@ local PlatformPanel = Create("Frame", {
     Create("UIStroke", {Color = PINK, Thickness = 2.5, ApplyStrokeMode = Enum.ApplyStrokeMode.Border})
 })
 
--- Фоновый градиент платформенной панели
 Create("Frame", {
     BackgroundColor3 = BG_DARK,
     Size = UDim2.new(1, 0, 1, 0),
@@ -1157,7 +1322,6 @@ Create("Frame", {
     })
 })
 
--- Заголовок Platform Z панели
 local PlatformHeader = Create("Frame", {
     BackgroundTransparency = 1,
     Size = UDim2.new(1, 0, 0, 28),
@@ -1186,7 +1350,6 @@ Create("Frame", {
     Parent = PlatformPanel
 })
 
--- Скролл внутри Platform панели
 local PlatformScroll = Create("ScrollingFrame", {
     BackgroundTransparency = 1,
     Position = UDim2.new(0, 5, 0, 32),
@@ -1210,7 +1373,7 @@ PlatformScrollLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(fun
     PlatformScroll.CanvasSize = UDim2.new(0, 0, 0, PlatformScrollLayout.AbsoluteContentSize.Y + 8)
 end)
 
--- ── TAB BUTTON (кнопка-вкладка на правом краю панели) ──────
+-- TAB BUTTON
 local TabButton = Create("Frame", {
     Name = "PlatformTabBtn",
     BackgroundColor3 = Color3.fromRGB(20, 8, 1),
@@ -1245,6 +1408,7 @@ local TabClickBtn = Create("TextButton", {
     Parent = TabButton
 })
 
+local PlatformTabVisible = false
 TabClickBtn.MouseButton1Click:Connect(function()
     PlatformTabVisible = not PlatformTabVisible
     PlatformPanel.Visible = PlatformTabVisible
@@ -1256,9 +1420,7 @@ TabClickBtn.MouseButton1Click:Connect(function()
     }):Play()
 end)
 
--- ============================================================
 -- CH FLOATING LOGO CIRCLE
--- ============================================================
 local chSize = 48
 local chCircle = Instance.new("Frame")
 chCircle.Name = "CH_Logo"
@@ -1339,7 +1501,7 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- ── TITLE BAR ──────────────────────────────────────────────
+-- TITLE BAR
 local TitleBar = Create("Frame", {
     BackgroundTransparency = 1,
     Size = UDim2.new(1, 0, 0, BANNER_H),
@@ -1389,6 +1551,7 @@ Create("Frame", {
     Parent = PanelFrame
 })
 
+-- Dragging for main container
 local dragging, dragInput, dragStart, startPos
 TitleBar.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -1412,7 +1575,7 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- ── SCROLL CONTAINER ───────────────────────────────────────
+-- SCROLL CONTAINER
 local ScrollFrame = Create("ScrollingFrame", {
     BackgroundTransparency = 1,
     Position = UDim2.new(0, 6, 0, BANNER_H + 4),
@@ -1543,6 +1706,7 @@ local function CreateToggle(parent, labelText, enabledKey, callback, order)
         isOn = not isOn
         Enabled[enabledKey] = isOn
         setVisual(isOn)
+        saveConfig()
     end)
 
     return row
@@ -1635,15 +1799,86 @@ local function CreateSlider(parent, labelText, minVal, maxVal, valueKey, callbac
             end
             Values[valueKey] = val
             callback(val)
+            saveConfig()
         end
     end)
 
     return container
 end
 
--- ============================================================
--- PROGRESS BAR
--- ============================================================
+-- NEW: Bind button
+local function CreateBindButton(parent, label, bindKey, order)
+    local row = Create("Frame", {
+        BackgroundColor3 = Color3.fromRGB(22, 9, 2),
+        Size = UDim2.new(1, -4, 0, TOGGLE_H),
+        LayoutOrder = order,
+        BorderSizePixel = 0,
+        ZIndex = 6,
+        Parent = parent
+    }, {
+        Create("UICorner", {CornerRadius=UDim.new(0,8)}),
+        Create("UIStroke", {Color=PINK_DARK, Thickness=1.5})
+    })
+
+    Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(0.6, 0, 1, 0),
+        Position = UDim2.new(0, 8, 0, 0),
+        Font = Enum.Font.GothamBold,
+        Text = label,
+        TextColor3 = Color3.fromRGB(255, 220, 180),
+        TextSize = FONT_TOGGLE,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ZIndex = 7,
+        Parent = row
+    })
+
+    local btn = Create("TextButton", {
+        BackgroundColor3 = Color3.fromRGB(30, 12, 2),
+        Size = UDim2.new(0, 70, 0, 22),
+        Position = UDim2.new(1, -78, 0.5, -11),
+        Font = Enum.Font.GothamBold,
+        Text = tostring(Keybinds[bindKey]):gsub("Enum.KeyCode.", ""),
+        TextColor3 = PINK,
+        TextSize = 10,
+        ZIndex = 7,
+        Parent = row
+    }, {
+        Create("UICorner", {CornerRadius=UDim.new(0,6)}),
+        Create("UIStroke", {Color=PINK_DARK, Thickness=1})
+    })
+
+    local isWaiting = false
+    btn.MouseButton1Click:Connect(function()
+        if isWaiting then return end
+        isWaiting = true
+        local oldText = btn.Text
+        btn.Text = "..."
+        local connection
+        connection = UserInputService.InputBegan:Connect(function(input, gpe)
+            if gpe then return end
+            if input.UserInputType == Enum.UserInputType.Keyboard then
+                local key = input.KeyCode
+                if key ~= Enum.KeyCode.Unknown then
+                    Keybinds[bindKey] = key
+                    btn.Text = tostring(key):gsub("Enum.KeyCode.", "")
+                    saveConfig()
+                    isWaiting = false
+                    connection:Disconnect()
+                end
+            end
+        end)
+        task.wait(5)
+        if isWaiting then
+            isWaiting = false
+            connection:Disconnect()
+            btn.Text = oldText
+        end
+    end)
+    return row
+end
+
+-- PROGRESS BAR (unchanged)
 local pbar = Instance.new("Frame")
 pbar.Size = UDim2.new(0, PBAR_W, 0, 44)
 pbar.Position = UDim2.new(0.5, -PBAR_W/2, 1, -110)
@@ -1727,13 +1962,13 @@ RunService.Heartbeat:Connect(function()
 end)
 
 -- ============================================================
--- POPULATE MAIN SCROLL — MOVEMENT
+-- POPULATE MAIN SCROLL
 -- ============================================================
 local order = 1
 
 CreateSection(ScrollFrame, "⚡  MOVEMENT", order) order += 1
 
-CreateToggle(ScrollFrame, "Speed Boost [V]", "SpeedBoost", function(s)
+CreateToggle(ScrollFrame, "Speed Boost [" .. tostring(Keybinds.SPEED):gsub("Enum.KeyCode.", "") .. "]", "SpeedBoost", function(s)
     Enabled.SpeedBoost = s
     if s then startSpeedBoost() else stopSpeedBoost() end
 end, order) order += 1
@@ -1742,7 +1977,7 @@ CreateSlider(ScrollFrame, "Boost Speed", 1, 70, "BoostSpeed", function(v)
     Values.BoostSpeed = v
 end, order) order += 1
 
-CreateToggle(ScrollFrame, "Float [F]", "Float", function(s)
+CreateToggle(ScrollFrame, "Float [" .. tostring(Keybinds.FLOAT):gsub("Enum.KeyCode.", "") .. "]", "Float", function(s)
     Enabled.Float = s
     if s then startFloat() else stopFloat() end
 end, order) order += 1
@@ -1757,9 +1992,7 @@ CreateSlider(ScrollFrame, "Gravity %", 25, 130, "GalaxyGravityPercent", function
     if galaxyModeEnabled then galaxyAdjustJump() end
 end, order) order += 1
 
--- ============================================================
 -- STEALING SECTION
--- ============================================================
 CreateSection(ScrollFrame, "🐾  STEALING", order) order += 1
 
 CreateToggle(ScrollFrame, "Auto Grab", "AutoSteal", function(s)
@@ -1780,7 +2013,7 @@ CreateSlider(ScrollFrame, "Steal Speed", 10, 35, "StealingSpeedValue", function(
     Values.StealingSpeedValue = v
 end, order) order += 1
 
-CreateToggle(ScrollFrame, "Auto Right Steal [E]", "AutoRight", function(s)
+CreateToggle(ScrollFrame, "Auto Right Steal [" .. tostring(Keybinds.AUTORIGHT):gsub("Enum.KeyCode.", "") .. "]", "AutoRight", function(s)
     Enabled.AutoRight = s
     if s then
         Enabled.AutoLeft = false
@@ -1792,7 +2025,7 @@ CreateToggle(ScrollFrame, "Auto Right Steal [E]", "AutoRight", function(s)
     end
 end, order) order += 1
 
-CreateToggle(ScrollFrame, "Auto Left Steal [Q]", "AutoLeft", function(s)
+CreateToggle(ScrollFrame, "Auto Left Steal [" .. tostring(Keybinds.AUTOLEFT):gsub("Enum.KeyCode.", "") .. "]", "AutoLeft", function(s)
     Enabled.AutoLeft = s
     if s then
         Enabled.AutoRight = false
@@ -1804,9 +2037,7 @@ CreateToggle(ScrollFrame, "Auto Left Steal [Q]", "AutoLeft", function(s)
     end
 end, order) order += 1
 
--- ============================================================
 -- COMBAT SECTION
--- ============================================================
 CreateSection(ScrollFrame, "⚔️  COMBAT", order) order += 1
 
 CreateToggle(ScrollFrame, "Hit Circle", "HitCircle", function(s)
@@ -1824,7 +2055,7 @@ CreateToggle(ScrollFrame, "Spam Bat", "SpamBat", function(s)
     if s then startSpamBat() else stopSpamBat() end
 end, order) order += 1
 
-CreateToggle(ScrollFrame, "🎯 Bat Aimbot [X]", "BatAimbot", function(s)
+CreateToggle(ScrollFrame, "🎯 Bat Aimbot [" .. tostring(Keybinds.BATAIMBOT):gsub("Enum.KeyCode.", "") .. "]", "BatAimbot", function(s)
     Enabled.BatAimbot = s
     if s then startBatAimbot() else stopBatAimbot() end
 end, order) order += 1
@@ -1848,9 +2079,7 @@ CreateToggle(ScrollFrame, "Unwalk", "Unwalk", function(s)
     if s then startUnwalk() else stopUnwalk() end
 end, order) order += 1
 
--- ============================================================
--- VISUAL / MISC SECTION
--- ============================================================
+-- VISUAL & MISC SECTION
 CreateSection(ScrollFrame, "✨  VISUAL & MISC", order) order += 1
 
 CreateToggle(ScrollFrame, "🌙 Orange Moon", "Vibrance", function(s)
@@ -1863,12 +2092,49 @@ CreateToggle(ScrollFrame, "Optimizer + XRay", "OptimizerXRay", function(s)
     if s then enableOptimizer() enableXRay() else disableOptimizer() disableXRay() end
 end, order) order += 1
 
+-- ESP SECTION
+CreateSection(ScrollFrame, "👁️  ESP (Chams)", order) order += 1
+
+CreateToggle(ScrollFrame, "ESP (Red Highlight)", "ESP", function(s)
+    Enabled.ESP = s
+    if s then startESP() else stopESP() end
+end, order) order += 1
+
+CreateSlider(ScrollFrame, "ESP Red", 0, 255, "ESPColorR", function(v)
+    Values.ESPColorR = v
+    refreshESP()
+end, order) order += 1
+
+CreateSlider(ScrollFrame, "ESP Green", 0, 255, "ESPColorG", function(v)
+    Values.ESPColorG = v
+    refreshESP()
+end, order) order += 1
+
+CreateSlider(ScrollFrame, "ESP Blue", 0, 255, "ESPColorB", function(v)
+    Values.ESPColorB = v
+    refreshESP()
+end, order) order += 1
+
+CreateSlider(ScrollFrame, "ESP Transparency", 0, 1, "ESPTransparency", function(v)
+    Values.ESPTransparency = v
+    refreshESP()
+end, order, true) order += 1
+
+-- KEYBINDS SECTION
+CreateSection(ScrollFrame, "⚙️  KEYBINDS", order) order += 1
+
+CreateBindButton(ScrollFrame, "Speed Boost", "SPEED", order) order += 1
+CreateBindButton(ScrollFrame, "Float", "FLOAT", order) order += 1
+CreateBindButton(ScrollFrame, "Auto Right", "AUTORIGHT", order) order += 1
+CreateBindButton(ScrollFrame, "Auto Left", "AUTOLEFT", order) order += 1
+CreateBindButton(ScrollFrame, "Bat Aimbot", "BATAIMBOT", order) order += 1
+CreateBindButton(ScrollFrame, "Platform Z", "PLATFORM", order) order += 1
+
 -- ============================================================
--- POPULATE PLATFORM Z SIDE PANEL
+-- PLATFORM Z SIDE PANEL (unchanged except saveConfig)
 -- ============================================================
 local pOrder = 1
 
--- Кнопка создания/удаления платформы
 local platformToggleRow = Create("Frame", {
     BackgroundColor3 = Color3.fromRGB(22, 9, 2),
     Size = UDim2.new(1, -4, 0, 32),
@@ -1887,7 +2153,7 @@ Create("TextLabel", {
     Size = UDim2.new(0.6, 0, 1, 0),
     Position = UDim2.new(0, 8, 0, 0),
     Font = Enum.Font.GothamBold,
-    Text = "Platform [R]",
+    Text = "Platform [" .. tostring(Keybinds.PLATFORM):gsub("Enum.KeyCode.", "") .. "]",
     TextColor3 = Color3.fromRGB(255, 220, 180),
     TextSize = FONT_TOGGLE,
     TextXAlignment = Enum.TextXAlignment.Left,
@@ -1929,6 +2195,7 @@ local function setPlatformVisual(state, skipCb)
         Position = platIsOn and UDim2.new(1,-(DOT_S+3),0.5,-DOT_S/2) or UDim2.new(0,3,0.5,-DOT_S/2)
     }):Play()
     if not skipCb then togglePlatformZ(platIsOn) end
+    saveConfig()
 end
 VisualSetters["PlatformZ"] = setPlatformVisual
 
@@ -1938,7 +2205,6 @@ platBtn.MouseButton1Click:Connect(function()
     setPlatformVisual(platIsOn)
 end)
 
--- Слайдер: Ширина платформы
 local function CreatePlatformSlider(labelText, minVal, maxVal, valueKey, callback, ord, isFloat)
     local container = Create("Frame", {
         BackgroundColor3 = Color3.fromRGB(22, 9, 2),
@@ -2026,13 +2292,13 @@ local function CreatePlatformSlider(labelText, minVal, maxVal, valueKey, callbac
             end
             Values[valueKey] = val
             callback(val)
+            saveConfig()
         end
     end)
 
     return container
 end
 
--- Применить изменения к существующей платформе
 local function refreshPlatform()
     if platformPart then
         platformPart.Size = Vector3.new(
@@ -2060,13 +2326,11 @@ end, pOrder, true) pOrder += 1
 
 CreatePlatformSlider("Height Offset", -10, 5, "PlatformHeightOffset", function(v)
     Values.PlatformHeightOffset = v
-    -- Пересоздаём платформу с новым offset если активна
     if platIsOn and platformPart then
         createPlatformZ()
     end
 end, pOrder) pOrder += 1
 
--- Кнопка "Пересоздать" — быстро пересоздать платформу под текущей позицией
 local rebuildBtn = Create("TextButton", {
     BackgroundColor3 = Color3.fromRGB(30, 12, 2),
     Size = UDim2.new(1, -4, 0, 26),
@@ -2094,8 +2358,10 @@ rebuildBtn.MouseButton1Click:Connect(function()
 end)
 
 -- ============================================================
--- FLOATING BUTTONS (outside main UI)
+-- FLOATING BUTTONS (unchanged)
 -- ============================================================
+local floatBtnUpdateRight, floatBtnUpdateLeft, floatBtnUpdateFloat, floatBtnUpdateAimbot
+
 local function CreateFloatingButton(labelText, icon, defaultPos, enabledKey, onToggle)
     local btnFrame = Create("Frame", {
         BackgroundColor3 = Color3.fromRGB(18, 7, 2),
@@ -2214,6 +2480,7 @@ local function CreateFloatingButton(labelText, icon, defaultPos, enabledKey, onT
         Enabled[enabledKey] = isActive
         updateVisual(isActive)
         onToggle(isActive, updateVisual)
+        saveConfig()
     end)
 
     task.spawn(function()
@@ -2227,13 +2494,11 @@ local function CreateFloatingButton(labelText, icon, defaultPos, enabledKey, onT
         end
     end)
 
-    return updateVisual
+    return updateVisual, btnFrame
 end
 
-local floatBtnUpdateRight, floatBtnUpdateLeft, floatBtnUpdateFloat, floatBtnUpdateAimbot
-
-floatBtnUpdateRight = CreateFloatingButton(
-    "Auto Right [E]", "➡",
+floatBtnUpdateRight, _ = CreateFloatingButton(
+    "Auto Right [" .. tostring(Keybinds.AUTORIGHT):gsub("Enum.KeyCode.", "") .. "]", "➡",
     UDim2.new(1, -144, 0.5, -64),
     "AutoRight",
     function(state)
@@ -2249,8 +2514,8 @@ floatBtnUpdateRight = CreateFloatingButton(
     end
 )
 
-floatBtnUpdateLeft = CreateFloatingButton(
-    "Auto Left [Q]", "⬅",
+floatBtnUpdateLeft, _ = CreateFloatingButton(
+    "Auto Left [" .. tostring(Keybinds.AUTOLEFT):gsub("Enum.KeyCode.", "") .. "]", "⬅",
     UDim2.new(1, -144, 0.5, -22),
     "AutoLeft",
     function(state)
@@ -2266,8 +2531,8 @@ floatBtnUpdateLeft = CreateFloatingButton(
     end
 )
 
-floatBtnUpdateFloat = CreateFloatingButton(
-    "Float [F]", "🚀",
+floatBtnUpdateFloat, _ = CreateFloatingButton(
+    "Float [" .. tostring(Keybinds.FLOAT):gsub("Enum.KeyCode.", "") .. "]", "🚀",
     UDim2.new(1, -144, 0.5, 20),
     "Float",
     function(state)
@@ -2277,19 +2542,8 @@ floatBtnUpdateFloat = CreateFloatingButton(
     end
 )
 
-floatBtnUpdateAimbot = CreateFloatingButton(
-    "Bat Aimbot [X]", "🎯",
-    UDim2.new(1, -144, 0.5, 62),
-    "BatAimbot",
-    function(state)
-        Enabled.BatAimbot = state
-        if VisualSetters.BatAimbot then VisualSetters.BatAimbot(state, true) end
-        if state then startBatAimbot() else stopBatAimbot() end
-    end
-)
-
-floatBtnUpdateAimbot = CreateFloatingButton(
-    "plot [R]", "🕸",
+floatBtnUpdateAimbot, _ = CreateFloatingButton(
+    "Bat Aimbot [" .. tostring(Keybinds.BATAIMBOT):gsub("Enum.KeyCode.", "") .. "]", "🎯",
     UDim2.new(1, -144, 0.5, 62),
     "BatAimbot",
     function(state)
@@ -2300,39 +2554,73 @@ floatBtnUpdateAimbot = CreateFloatingButton(
 )
 
 -- ============================================================
--- KEYBINDS & CHARACTER RESPAWN
+-- LOAD CONFIG AND START FEATURES
+-- ============================================================
+loadConfig()
+
+-- Apply visual states after load
+task.wait(0.5)
+for key, val in pairs(Enabled) do
+    if VisualSetters[key] then
+        VisualSetters[key](val, true)
+    end
+end
+refreshESP()
+
+-- Start features that are already enabled
+if Enabled.SpeedBoost then startSpeedBoost() end
+if Enabled.AutoSteal then startAutoSteal() end
+if Enabled.SpeedWhileStealing then startSpeedWhileStealing() end
+if Enabled.AntiRagdoll then startAntiRagdoll() end
+if Enabled.HitCircle then startHitCircle() end
+if Enabled.SpamBat then startSpamBat() end
+if Enabled.Helicopter then startHelicopter() end
+if Enabled.BatAimbot then startBatAimbot() end
+if Enabled.Vibrance then enablePinkMoon() end
+if Enabled.OptimizerXRay then enableOptimizer() enableXRay() end
+if Enabled.GalaxyMode then startGalaxyMode() end
+if Enabled.ESP then startESP() end
+if Enabled.AutoRight then
+    startStealPath(stealPath_Right)
+elseif Enabled.AutoLeft then
+    startStealPath(stealPath_Left)
+end
+if Enabled.PlatformZ then
+    createPlatformZ()
+end
+
+-- ============================================================
+-- KEYBINDS HANDLING (dynamic)
 -- ============================================================
 UserInputService.InputBegan:Connect(function(input, gpe)
     if gpe then return end
 
     if input.KeyCode == Enum.KeyCode.Delete then
         ScreenGui:Destroy()
-
     elseif input.KeyCode == Enum.KeyCode.U then
         uiVisible = not uiVisible
         MainContainer.Visible = uiVisible
         TweenService:Create(chCircle, TweenInfo.new(0.2), {
             BackgroundColor3 = uiVisible and Color3.fromRGB(20, 8, 1) or Color3.fromRGB(50, 20, 2)
         }):Play()
-
-    elseif input.KeyCode == KEYBINDS.SPEED then
+    elseif input.KeyCode == Keybinds.SPEED then
         Enabled.SpeedBoost = not Enabled.SpeedBoost
         if VisualSetters.SpeedBoost then VisualSetters.SpeedBoost(Enabled.SpeedBoost) end
         if Enabled.SpeedBoost then startSpeedBoost() else stopSpeedBoost() end
-
-    elseif input.KeyCode == KEYBINDS.FLOAT then
+        saveConfig()
+    elseif input.KeyCode == Keybinds.FLOAT then
         Enabled.Float = not Enabled.Float
         if VisualSetters.Float then VisualSetters.Float(Enabled.Float) end
         if floatBtnUpdateFloat then floatBtnUpdateFloat(Enabled.Float) end
         if Enabled.Float then startFloat() else stopFloat() end
-
-    elseif input.KeyCode == KEYBINDS.BATAIMBOT then
+        saveConfig()
+    elseif input.KeyCode == Keybinds.BATAIMBOT then
         Enabled.BatAimbot = not Enabled.BatAimbot
         if VisualSetters.BatAimbot then VisualSetters.BatAimbot(Enabled.BatAimbot) end
         if floatBtnUpdateAimbot then floatBtnUpdateAimbot(Enabled.BatAimbot) end
         if Enabled.BatAimbot then startBatAimbot() else stopBatAimbot() end
-
-    elseif input.KeyCode == KEYBINDS.AUTORIGHT then
+        saveConfig()
+    elseif input.KeyCode == Keybinds.AUTORIGHT then
         Enabled.AutoRight = not Enabled.AutoRight
         if VisualSetters.AutoRight then VisualSetters.AutoRight(Enabled.AutoRight) end
         if floatBtnUpdateRight then floatBtnUpdateRight(Enabled.AutoRight) end
@@ -2344,8 +2632,8 @@ UserInputService.InputBegan:Connect(function(input, gpe)
         else
             stopStealPath()
         end
-
-    elseif input.KeyCode == KEYBINDS.AUTOLEFT then
+        saveConfig()
+    elseif input.KeyCode == Keybinds.AUTOLEFT then
         Enabled.AutoLeft = not Enabled.AutoLeft
         if VisualSetters.AutoLeft then VisualSetters.AutoLeft(Enabled.AutoLeft) end
         if floatBtnUpdateLeft then floatBtnUpdateLeft(Enabled.AutoLeft) end
@@ -2357,15 +2645,16 @@ UserInputService.InputBegan:Connect(function(input, gpe)
         else
             stopStealPath()
         end
-
-    elseif input.KeyCode == KEYBINDS.PLATFORM then
-        -- Z — переключить платформу
+        saveConfig()
+    elseif input.KeyCode == Keybinds.PLATFORM then
         platIsOn = not platIsOn
         Enabled.PlatformZ = platIsOn
         setPlatformVisual(platIsOn)
+        saveConfig()
     end
 end)
 
+-- Character respawn handler
 Player.CharacterAdded:Connect(function()
     task.wait(1)
     if Enabled.SpeedBoost then startSpeedBoost() end
@@ -2376,6 +2665,6 @@ Player.CharacterAdded:Connect(function()
     if Enabled.SpamBat then startSpamBat() end
     if Enabled.Helicopter then startHelicopter() end
     if Enabled.BatAimbot then stopBatAimbot() task.wait(0.1) startBatAimbot() end
-    -- Пересоздаём платформу после респауна если активна
+    if Enabled.ESP then startESP() end
     if platIsOn then createPlatformZ() end
 end)
