@@ -1,4 +1,3 @@
-
 local CoreGui = game:GetService("CoreGui")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -78,7 +77,7 @@ local Values = {
     ESPTransparency      = 0.5,
 }
 
--- Default keybinds
+-- Default keybinds (ДОБАВЛЕН GRAVITY)
 local DefaultKeybinds = {
     SPEED     = Enum.KeyCode.V,
     FLOAT     = Enum.KeyCode.F,
@@ -87,6 +86,7 @@ local DefaultKeybinds = {
     BATAIMBOT = Enum.KeyCode.X,
     PLATFORM  = Enum.KeyCode.R,
     DROP      = Enum.KeyCode.C,
+    GRAVITY   = Enum.KeyCode.T,   -- НОВЫЙ БИНД
 }
 
 local Keybinds = {}
@@ -159,19 +159,16 @@ local function performDrop()
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
 
-    -- Рассчитываем скорость для подъёма на 2 метра с учётом текущей гравитации
     local gravity = workspace.Gravity
     local targetHeight = 2
     local requiredVel = math.sqrt(2 * gravity * targetHeight)
     
-    -- Устанавливаем вертикальную скорость
     hrp.AssemblyLinearVelocity = Vector3.new(
         hrp.AssemblyLinearVelocity.X,
         requiredVel,
         hrp.AssemblyLinearVelocity.Z
     )
     
-    -- Показываем красивый текст "DROP"
     local billboard = Instance.new("BillboardGui")
     billboard.Size = UDim2.new(0, 100, 0, 30)
     billboard.StudsOffset = Vector3.new(0, 2, 0)
@@ -2416,6 +2413,7 @@ CreateBindButton(ScrollFrame, "Auto Left", "AUTOLEFT", order) order += 1
 CreateBindButton(ScrollFrame, "Bat Aimbot", "BATAIMBOT", order) order += 1
 CreateBindButton(ScrollFrame, "Platform Z", "PLATFORM", order) order += 1
 CreateBindButton(ScrollFrame, "Droop", "DROP", order) order += 1
+CreateBindButton(ScrollFrame, "Gravity Mode", "GRAVITY", order) order += 1   -- НОВАЯ КНОПКА
 
 -- ============================================================
 -- PLATFORM Z SIDE PANEL
@@ -3048,6 +3046,11 @@ UserInputService.InputBegan:Connect(function(input, gpe)
         saveConfig()
     elseif input.KeyCode == Keybinds.DROP then
         performDrop()
+    elseif input.KeyCode == Keybinds.GRAVITY then   -- НОВЫЙ ОБРАБОТЧИК
+        Enabled.GalaxyMode = not Enabled.GalaxyMode
+        if VisualSetters.GalaxyMode then VisualSetters.GalaxyMode(Enabled.GalaxyMode) end
+        if Enabled.GalaxyMode then startGalaxyMode() else stopGalaxyMode() end
+        saveConfig()
     end
 end)
 
