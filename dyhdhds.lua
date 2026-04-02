@@ -1,3 +1,4 @@
+
 local CoreGui = game:GetService("CoreGui")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -9,7 +10,7 @@ local HttpService = game:GetService("HttpService")
 local Player = Players.LocalPlayer
 
 -- ============================================================
--- KEY CHECK (global variable _G.ASIX_KEY must be "67")
+-- KEY CHECK
 -- ============================================================
 if getgenv().ASIX_KEY ~= "67" then
     warn("Invalid key. Use: _G.ASIX_KEY = '67' before loading the script.")
@@ -75,7 +76,6 @@ local Values = {
     ESPColorG            = 0,
     ESPColorB            = 0,
     ESPTransparency      = 0.5,
-    -- Цвета убраны, везде используется красный (255,0,0)
 }
 
 -- Default keybinds
@@ -86,9 +86,9 @@ local DefaultKeybinds = {
     AUTOLEFT  = Enum.KeyCode.Q,
     BATAIMBOT = Enum.KeyCode.X,
     PLATFORM  = Enum.KeyCode.R,
+    DROP      = Enum.KeyCode.C,
 }
 
--- Current keybinds (will be loaded from config)
 local Keybinds = {}
 for k, v in pairs(DefaultKeybinds) do
     Keybinds[k] = v
@@ -148,6 +148,46 @@ local function loadConfig()
             Keybinds[k] = v
         end
     end
+end
+
+-- ============================================================
+-- DROP FUNCTION (подлёт ровно на 2 метра)
+-- ============================================================
+local function performDrop()
+    local char = Player.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    -- Рассчитываем скорость для подъёма на 2 метра с учётом текущей гравитации
+    local gravity = workspace.Gravity
+    local targetHeight = 2
+    local requiredVel = math.sqrt(2 * gravity * targetHeight)
+    
+    -- Устанавливаем вертикальную скорость
+    hrp.AssemblyLinearVelocity = Vector3.new(
+        hrp.AssemblyLinearVelocity.X,
+        requiredVel,
+        hrp.AssemblyLinearVelocity.Z
+    )
+    
+    -- Показываем красивый текст "DROP"
+    local billboard = Instance.new("BillboardGui")
+    billboard.Size = UDim2.new(0, 100, 0, 30)
+    billboard.StudsOffset = Vector3.new(0, 2, 0)
+    billboard.AlwaysOnTop = true
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.Font = Enum.Font.GothamBold
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.TextStrokeTransparency = 0.3
+    label.Text = "DROOP"
+    label.TextSize = 18
+    label.Parent = billboard
+    billboard.Parent = hrp
+    task.wait(0.8)
+    billboard:Destroy()
 end
 
 -- ============================================================
@@ -231,7 +271,7 @@ local function refreshESP()
 end
 
 -- ============================================================
--- NEW: ZOMBIE ANIMATION (фикс для R15, анимация R15)
+-- ZOMBIE ANIMATION
 -- ============================================================
 local zombieAnimTrack = nil
 local function startZombieAnim()
@@ -240,8 +280,7 @@ local function startZombieAnim()
     local hum = char:FindFirstChildOfClass("Humanoid")
     if not hum then return end
     if zombieAnimTrack then zombieAnimTrack:Stop() zombieAnimTrack = nil end
-    -- Используем анимацию зомби для R15 (работает и на R6)
-    local animId = "rbxassetid://10865517612" -- зомби-походка R15
+    local animId = "rbxassetid://10865517612"
     local anim = Instance.new("Animation")
     anim.AnimationId = animId
     zombieAnimTrack = hum:LoadAnimation(anim)
@@ -275,7 +314,7 @@ local function stopZombieAnim()
 end
 
 -- ============================================================
--- NEW: PIXEL SKIN (фиксированный красный цвет)
+-- PIXEL SKIN (red)
 -- ============================================================
 local originalMaterials = {}
 local function pixelatePlayer(player)
@@ -291,7 +330,7 @@ local function pixelatePlayer(player)
                 }
             end
             part.Material = Enum.Material.Plastic
-            part.Color = Color3.fromRGB(255, 0, 0) -- всегда красный
+            part.Color = Color3.fromRGB(255, 0, 0)
             if part:IsA("MeshPart") then
                 part.TextureID = ""
             end
@@ -353,11 +392,11 @@ local function stopPixelSkin()
 end
 
 -- ============================================================
--- NEW: SPEED TEXT ABOVE HEAD (фиксированный красный, без тряски)
+-- SPEED TEXT ABOVE HEAD (red)
 -- ============================================================
 local speedLabels = {}
 local lastSpeedUpdate = 0
-local UPDATE_INTERVAL = 0.1 -- обновление текста каждые 0.1 секунды
+local UPDATE_INTERVAL = 0.1
 
 local function createSpeedLabel(player)
     if speedLabels[player] then return end
@@ -369,14 +408,14 @@ local function createSpeedLabel(player)
     billboard.Name = "SpeedLabel"
     billboard.Adornee = head
     billboard.Size = UDim2.new(0, 120, 0, 30)
-    billboard.StudsOffset = Vector3.new(0, 2.2, 0) -- подняли выше головы для стабильности
+    billboard.StudsOffset = Vector3.new(0, 2.2, 0)
     billboard.AlwaysOnTop = true
     billboard.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     local textLabel = Instance.new("TextLabel")
     textLabel.Size = UDim2.new(1, 0, 1, 0)
     textLabel.BackgroundTransparency = 1
     textLabel.Font = Enum.Font.GothamBold
-    textLabel.TextColor3 = Color3.fromRGB(255, 0, 0) -- всегда красный
+    textLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
     textLabel.TextStrokeTransparency = 0.5
     textLabel.TextStrokeColor3 = Color3.new(0,0,0)
     textLabel.TextSize = 14
@@ -455,7 +494,7 @@ local function stopSpeedText()
 end
 
 -- ============================================================
--- HELPER: Ragdoll check (for Galaxy)
+-- HELPER: Ragdoll check
 -- ============================================================
 local function isPlayerRagdolled()
     local char = Player.Character
@@ -476,7 +515,7 @@ local function isPlayerRagdolled()
 end
 
 -- ============================================================
--- FEATURE FUNCTIONS (unchanged from original)
+-- FEATURE FUNCTIONS (unchanged)
 -- ============================================================
 local function getMovementDirection()
     local c = Player.Character
@@ -1033,7 +1072,7 @@ local function createPlatformZ()
     platformPart.CanCollide = true
     platformPart.CastShadow = false
     platformPart.Material = Enum.Material.Neon
-    platformPart.Color    = Color3.fromRGB(255, 100, 0)
+    platformPart.Color    = Color3.fromRGB(200, 200, 200)
     platformPart.Transparency = 0.35
     platformPart.Size     = Vector3.new(
         Values.PlatformWidth,
@@ -1107,7 +1146,7 @@ local function disableXRay()
     originalTransparency = {}
 end
 
--- Pink Moon (Vibrance)
+-- Vibrance (grayscale)
 local pinkMoonCC       = nil
 local pinkMoonBloom    = nil
 local pinkMoonConn     = nil
@@ -1117,21 +1156,21 @@ local pinkMoonBall     = nil
 local function enablePinkMoon()
     if pinkMoonCC then return end
     pinkMoonCC = Instance.new("ColorCorrectionEffect")
-    pinkMoonCC.TintColor = Color3.fromRGB(255, 140, 30)
-    pinkMoonCC.Saturation = 0.6
-    pinkMoonCC.Contrast   = 0.15
-    pinkMoonCC.Brightness = 0.05
+    pinkMoonCC.TintColor = Color3.fromRGB(128, 128, 128)
+    pinkMoonCC.Saturation = 0
+    pinkMoonCC.Contrast   = 0.05
+    pinkMoonCC.Brightness = 0.02
     pinkMoonCC.Parent = Lighting
 
     pinkMoonBloom = Instance.new("BloomEffect")
-    pinkMoonBloom.Intensity  = 1.2
-    pinkMoonBloom.Size       = 20
-    pinkMoonBloom.Threshold  = 0.7
+    pinkMoonBloom.Intensity  = 0.5
+    pinkMoonBloom.Size       = 12
+    pinkMoonBloom.Threshold  = 0.8
     pinkMoonBloom.Parent = Lighting
 
-    Lighting.ExposureCompensation = 0.2
-    Lighting.Ambient = Color3.fromRGB(60, 25, 5)
-    Lighting.OutdoorAmbient = Color3.fromRGB(80, 35, 8)
+    Lighting.ExposureCompensation = 0.1
+    Lighting.Ambient = Color3.fromRGB(30, 30, 30)
+    Lighting.OutdoorAmbient = Color3.fromRGB(40, 40, 40)
 
     pinkMoonBall = Instance.new("Part")
     pinkMoonBall.Name         = "PinkMoon"
@@ -1141,7 +1180,7 @@ local function enablePinkMoon()
     pinkMoonBall.Massless     = true
     pinkMoonBall.Material     = Enum.Material.Neon
     pinkMoonBall.Shape        = Enum.PartType.Ball
-    pinkMoonBall.Color        = Color3.fromRGB(255, 100, 0)
+    pinkMoonBall.Color        = Color3.fromRGB(100, 100, 100)
     pinkMoonBall.Size         = Vector3.new(60, 60, 60)
     pinkMoonBall.Position     = Vector3.new(0, 800, -500)
     pinkMoonBall.Parent       = workspace
@@ -1160,30 +1199,30 @@ local function enablePinkMoon()
     pinkMoonFOV.Position           = UDim2.new(0, 0, 0, 0)
     pinkMoonFOV.BackgroundTransparency = 1
     pinkMoonFOV.Image              = "rbxassetid://6923796549"
-    pinkMoonFOV.ImageColor3        = Color3.fromRGB(255, 120, 0)
-    pinkMoonFOV.ImageTransparency  = 0.55
+    pinkMoonFOV.ImageColor3        = Color3.fromRGB(200, 200, 200)
+    pinkMoonFOV.ImageTransparency  = 0.6
     pinkMoonFOV.ZIndex             = 1
     pinkMoonFOV.Parent             = screenGui
 
     pinkMoonConn = RunService.Heartbeat:Connect(function()
         if not Enabled.Vibrance then return end
         local t = tick()
-        local pulse = math.sin(t * 0.9) * 0.08
+        local pulse = math.sin(t * 0.9) * 0.05
         if pinkMoonCC then
-            pinkMoonCC.Saturation = 0.55 + pulse
-            pinkMoonCC.Brightness = 0.04 + pulse * 0.3
+            pinkMoonCC.Saturation = 0 + pulse
+            pinkMoonCC.Brightness = 0.02 + pulse * 0.2
         end
         if pinkMoonBloom then
-            pinkMoonBloom.Intensity = 1.1 + math.sin(t * 1.3) * 0.3
+            pinkMoonBloom.Intensity = 0.5 + math.sin(t * 1.3) * 0.2
         end
         if pinkMoonFOV then
-            pinkMoonFOV.ImageTransparency = 0.52 + math.sin(t * 0.7) * 0.06
+            pinkMoonFOV.ImageTransparency = 0.55 + math.sin(t * 0.7) * 0.05
         end
         if pinkMoonBall then
             pinkMoonBall.Color = Color3.fromRGB(
-                255,
-                math.floor(100 + math.sin(t * 0.5) * 40),
-                math.floor(0 + math.sin(t * 0.8) * 15)
+                100 + math.sin(t * 0.5) * 20,
+                100 + math.sin(t * 0.5) * 20,
+                100 + math.sin(t * 0.5) * 20
             )
         end
     end)
@@ -1407,7 +1446,7 @@ local function stopStealPath()
 end
 
 -- ============================================================
--- UI CONSTRUCTION (without password)
+-- UI CONSTRUCTION (black & white + grey outline)
 -- ============================================================
 if CoreGui:FindFirstChild("Asix") then
     CoreGui.Asix:Destroy()
@@ -1419,13 +1458,15 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = CoreGui
 
--- Colors
-local PINK       = Color3.fromRGB(255, 120, 0)
-local PINK_LIGHT = Color3.fromRGB(255, 160, 40)
-local PINK_DARK  = Color3.fromRGB(200, 80, 0)
-local BG_DARK    = Color3.fromRGB(18, 8, 2)
-local BG_MID     = Color3.fromRGB(25, 10, 3)
-local SECTION_BG = Color3.fromRGB(14, 6, 1)
+-- Colors (black/white/grey)
+local GREY       = Color3.fromRGB(128, 128, 128)
+local GREY_LIGHT = Color3.fromRGB(180, 180, 180)
+local GREY_DARK  = Color3.fromRGB(60, 60, 60)
+local BG_DARK    = Color3.fromRGB(10, 10, 10)
+local BG_MID     = Color3.fromRGB(20, 20, 20)
+local SECTION_BG = Color3.fromRGB(15, 15, 15)
+local TEXT_WHITE = Color3.fromRGB(255, 255, 255)
+local TEXT_GREY  = Color3.fromRGB(200, 200, 200)
 
 local PANEL_W      = 230
 local BANNER_H     = 28
@@ -1451,7 +1492,7 @@ local function Create(className, properties, children)
     return inst
 end
 
--- MAIN CONTAINER (visible immediately)
+-- MAIN CONTAINER
 local MainContainer = Create("Frame", {
     Name = "MainContainer",
     BackgroundTransparency = 1,
@@ -1471,7 +1512,7 @@ local PanelFrame = Create("Frame", {
     Parent = MainContainer
 }, {
     Create("UICorner", {CornerRadius = UDim.new(0, 12)}),
-    Create("UIStroke", {Color = PINK, Thickness = 3, ApplyStrokeMode = Enum.ApplyStrokeMode.Border})
+    Create("UIStroke", {Color = GREY, Thickness = 3, ApplyStrokeMode = Enum.ApplyStrokeMode.Border})
 })
 
 Create("Frame", {
@@ -1484,10 +1525,10 @@ Create("Frame", {
     Create("UICorner", {CornerRadius = UDim.new(0, 12)}),
     Create("UIGradient", {
         Color = ColorSequence.new{
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(28, 10, 2)),
-            ColorSequenceKeypoint.new(0.4, Color3.fromRGB(35, 13, 3)),
-            ColorSequenceKeypoint.new(0.8, Color3.fromRGB(45, 18, 4)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(30, 11, 2))
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(20, 20, 20)),
+            ColorSequenceKeypoint.new(0.4, Color3.fromRGB(25, 25, 25)),
+            ColorSequenceKeypoint.new(0.8, Color3.fromRGB(30, 30, 30)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(20, 20, 20))
         },
         Rotation = 135
     })
@@ -1497,7 +1538,7 @@ local particleBg = Create("Frame", {BackgroundTransparency=1, Size=UDim2.new(1,0
 for i = 1, 18 do
     local sz = math.random(2, 5)
     local p = Create("Frame", {
-        BackgroundColor3 = math.random(1,2)==1 and PINK or PINK_LIGHT,
+        BackgroundColor3 = math.random(1,2)==1 and GREY or GREY_LIGHT,
         BorderSizePixel = 0,
         Size = UDim2.new(0, sz, 0, sz),
         Position = UDim2.new(math.random(0,100)/100, 0, math.random(0,100)/100, 0),
@@ -1516,7 +1557,7 @@ for i = 1, 18 do
     end)
 end
 
--- Platform Z side panel (unchanged)
+-- Platform Z side panel
 local PlatformPanel = Create("Frame", {
     Name = "PlatformPanel",
     BackgroundColor3 = BG_DARK,
@@ -1529,7 +1570,7 @@ local PlatformPanel = Create("Frame", {
     Parent = MainContainer
 }, {
     Create("UICorner", {CornerRadius = UDim.new(0, 12)}),
-    Create("UIStroke", {Color = PINK, Thickness = 2.5, ApplyStrokeMode = Enum.ApplyStrokeMode.Border})
+    Create("UIStroke", {Color = GREY, Thickness = 2.5, ApplyStrokeMode = Enum.ApplyStrokeMode.Border})
 })
 
 Create("Frame", {
@@ -1542,8 +1583,8 @@ Create("Frame", {
     Create("UICorner", {CornerRadius = UDim.new(0, 12)}),
     Create("UIGradient", {
         Color = ColorSequence.new{
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(28, 10, 2)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(18, 7, 1))
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(20, 20, 20)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(15, 15, 15))
         },
         Rotation = 120
     })
@@ -1561,14 +1602,14 @@ Create("TextLabel", {
     Position = UDim2.new(0, 10, 0, 0),
     Font = Enum.Font.GothamBold,
     Text = "⬛  PLATFORM Z",
-    TextColor3 = PINK,
+    TextColor3 = GREY,
     TextSize = 12,
     TextXAlignment = Enum.TextXAlignment.Left,
     ZIndex = 9,
     Parent = PlatformHeader
 })
 Create("Frame", {
-    BackgroundColor3 = PINK,
+    BackgroundColor3 = GREY,
     BackgroundTransparency = 0.6,
     Position = UDim2.new(0, 8, 0, 26),
     Size = UDim2.new(1, -16, 0, 1),
@@ -1583,7 +1624,7 @@ local PlatformScroll = Create("ScrollingFrame", {
     Size = UDim2.new(1, -10, 1, -36),
     CanvasSize = UDim2.new(0, 0, 0, 0),
     ScrollBarThickness = 3,
-    ScrollBarImageColor3 = PINK,
+    ScrollBarImageColor3 = GREY,
     BorderSizePixel = 0,
     ZIndex = 7,
     Parent = PlatformPanel
@@ -1603,7 +1644,7 @@ end)
 -- TAB BUTTON
 local TabButton = Create("Frame", {
     Name = "PlatformTabBtn",
-    BackgroundColor3 = Color3.fromRGB(20, 8, 1),
+    BackgroundColor3 = Color3.fromRGB(15, 15, 15),
     BorderSizePixel = 0,
     Position = UDim2.new(1, 3, 0, 60),
     Size = UDim2.new(0, 22, 0, 72),
@@ -1611,7 +1652,7 @@ local TabButton = Create("Frame", {
     Parent = MainContainer
 }, {
     Create("UICorner", {CornerRadius = UDim.new(0, 8)}),
-    Create("UIStroke", {Color = PINK, Thickness = 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border})
+    Create("UIStroke", {Color = GREY, Thickness = 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border})
 })
 
 local TabIcon = Create("TextLabel", {
@@ -1619,7 +1660,7 @@ local TabIcon = Create("TextLabel", {
     Size = UDim2.new(1, 0, 1, 0),
     Font = Enum.Font.GothamBold,
     Text = "⬛",
-    TextColor3 = PINK,
+    TextColor3 = GREY,
     TextSize = 12,
     TextXAlignment = Enum.TextXAlignment.Center,
     TextYAlignment = Enum.TextYAlignment.Center,
@@ -1640,10 +1681,10 @@ TabClickBtn.MouseButton1Click:Connect(function()
     PlatformTabVisible = not PlatformTabVisible
     PlatformPanel.Visible = PlatformTabVisible
     TweenService:Create(TabButton, TweenInfo.new(0.2), {
-        BackgroundColor3 = PlatformTabVisible and Color3.fromRGB(50, 18, 2) or Color3.fromRGB(20, 8, 1)
+        BackgroundColor3 = PlatformTabVisible and Color3.fromRGB(30, 30, 30) or Color3.fromRGB(15, 15, 15)
     }):Play()
     TweenService:Create(TabIcon, TweenInfo.new(0.2), {
-        TextColor3 = PlatformTabVisible and PINK_LIGHT or PINK
+        TextColor3 = PlatformTabVisible and GREY_LIGHT or GREY
     }):Play()
 end)
 
@@ -1653,7 +1694,7 @@ local chCircle = Instance.new("Frame")
 chCircle.Name = "CH_Logo"
 chCircle.Size = UDim2.new(0, chSize, 0, chSize)
 chCircle.Position = UDim2.new(0, 16, 0.5, -(480/2) - chSize - 10)
-chCircle.BackgroundColor3 = Color3.fromRGB(20, 8, 1)
+chCircle.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 chCircle.BorderSizePixel = 0
 chCircle.ZIndex = 50
 chCircle.Parent = ScreenGui
@@ -1665,9 +1706,9 @@ chStroke.Thickness = 2.5
 chStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 local chGrad = Instance.new("UIGradient", chStroke)
 chGrad.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0,    Color3.fromRGB(255, 140, 0)),
-    ColorSequenceKeypoint.new(0.5,  Color3.fromRGB(255, 70,  0)),
-    ColorSequenceKeypoint.new(1,    Color3.fromRGB(255, 140, 0)),
+    ColorSequenceKeypoint.new(0,    Color3.fromRGB(180, 180, 180)),
+    ColorSequenceKeypoint.new(0.5,  Color3.fromRGB(100, 100, 100)),
+    ColorSequenceKeypoint.new(1,    Color3.fromRGB(180, 180, 180)),
 })
 task.spawn(function()
     local r = 0
@@ -1683,7 +1724,7 @@ chText.BackgroundTransparency = 1
 chText.Size = UDim2.new(1, 0, 1, 0)
 chText.Font = Enum.Font.GothamBlack
 chText.Text = "AX"
-chText.TextColor3 = Color3.fromRGB(255, 255, 255)
+chText.TextColor3 = TEXT_WHITE
 chText.TextSize = 18
 chText.TextXAlignment = Enum.TextXAlignment.Center
 chText.TextYAlignment = Enum.TextYAlignment.Center
@@ -1702,7 +1743,7 @@ chBtn.MouseButton1Click:Connect(function()
     uiVisible = not uiVisible
     MainContainer.Visible = uiVisible
     TweenService:Create(chCircle, TweenInfo.new(0.2), {
-        BackgroundColor3 = uiVisible and Color3.fromRGB(20, 8, 1) or Color3.fromRGB(50, 20, 2)
+        BackgroundColor3 = uiVisible and Color3.fromRGB(15, 15, 15) or Color3.fromRGB(30, 30, 30)
     }):Play()
 end)
 
@@ -1742,7 +1783,7 @@ Create("TextLabel", {
     Position = UDim2.new(0, 10, 0, 0),
     Font = Enum.Font.GothamBold,
     Text = "Asix",
-    TextColor3 = PINK,
+    TextColor3 = TEXT_WHITE,
     TextSize = FONT_TITLE,
     TextStrokeTransparency = 0.3,
     TextStrokeColor3 = Color3.fromRGB(0, 0, 0),
@@ -1752,24 +1793,24 @@ Create("TextLabel", {
 })
 
 local CloseBtn = Create("TextButton", {
-    BackgroundColor3 = PINK_DARK,
+    BackgroundColor3 = GREY_DARK,
     Position = UDim2.new(1, -28, 0.5, -9),
     Size = UDim2.new(0, 18, 0, 18),
     Font = Enum.Font.GothamBold,
     Text = "X",
-    TextColor3 = Color3.new(1,1,1),
+    TextColor3 = TEXT_WHITE,
     TextSize = 10,
     AutoButtonColor = false,
     ZIndex = 12,
     Parent = TitleBar
 }, {
     Create("UICorner", {CornerRadius=UDim.new(1,0)}),
-    Create("UIStroke", {Color=PINK_LIGHT, Thickness=2})
+    Create("UIStroke", {Color=GREY_LIGHT, Thickness=2})
 })
 CloseBtn.MouseButton1Click:Connect(function() ScreenGui:Destroy() end)
 
 Create("Frame", {
-    BackgroundColor3 = PINK,
+    BackgroundColor3 = GREY,
     BackgroundTransparency = 0.6,
     Position = UDim2.new(0, 8, 0, BANNER_H - 2),
     Size = UDim2.new(1, -16, 0, 1),
@@ -1809,7 +1850,7 @@ local ScrollFrame = Create("ScrollingFrame", {
     Size = UDim2.new(1, -12, 1, -(BANNER_H + 10)),
     CanvasSize = UDim2.new(0, 0, 0, 0),
     ScrollBarThickness = 3,
-    ScrollBarImageColor3 = PINK,
+    ScrollBarImageColor3 = GREY,
     BorderSizePixel = 0,
     ZIndex = 5,
     Parent = PanelFrame
@@ -1827,7 +1868,7 @@ ContentLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
 end)
 
 -- ============================================================
--- SECTION / TOGGLE / SLIDER BUILDERS
+-- SECTION / TOGGLE / SLIDER / ACTION BUTTON BUILDERS
 -- ============================================================
 local VisualSetters = {}
 
@@ -1841,7 +1882,7 @@ local function CreateSection(parent, title, order)
         Parent = parent
     }, {
         Create("UICorner", {CornerRadius=UDim.new(0,6)}),
-        Create("UIStroke", {Color=PINK_DARK, Thickness=1.5, Transparency=0.4})
+        Create("UIStroke", {Color=GREY_DARK, Thickness=1.5, Transparency=0.4})
     })
     Create("TextLabel", {
         BackgroundTransparency = 1,
@@ -1849,14 +1890,14 @@ local function CreateSection(parent, title, order)
         Position = UDim2.new(0,8,0,0),
         Font = Enum.Font.GothamBold,
         Text = title,
-        TextColor3 = Color3.fromRGB(200,130,255),
+        TextColor3 = TEXT_GREY,
         TextSize = FONT_SECTION,
         TextXAlignment = Enum.TextXAlignment.Left,
         ZIndex = 7,
         Parent = sec
     })
     Create("Frame", {
-        BackgroundColor3 = PINK,
+        BackgroundColor3 = GREY,
         BackgroundTransparency = 0.5,
         Position = UDim2.new(0, 4, 1, -1),
         Size = UDim2.new(1, -8, 0, 1),
@@ -1869,7 +1910,7 @@ end
 
 local function CreateToggle(parent, labelText, enabledKey, callback, order)
     local row = Create("Frame", {
-        BackgroundColor3 = Color3.fromRGB(22, 9, 2),
+        BackgroundColor3 = BG_MID,
         Size = UDim2.new(1, -4, 0, TOGGLE_H),
         LayoutOrder = order or 0,
         BorderSizePixel = 0,
@@ -1877,7 +1918,7 @@ local function CreateToggle(parent, labelText, enabledKey, callback, order)
         Parent = parent
     }, {
         Create("UICorner", {CornerRadius=UDim.new(0,8)}),
-        Create("UIStroke", {Color=PINK_DARK, Thickness=1.5})
+        Create("UIStroke", {Color=GREY_DARK, Thickness=1.5})
     })
 
     Create("TextLabel", {
@@ -1886,7 +1927,7 @@ local function CreateToggle(parent, labelText, enabledKey, callback, order)
         Position = UDim2.new(0, 8, 0, 0),
         Font = Enum.Font.GothamBold,
         Text = labelText,
-        TextColor3 = Color3.fromRGB(255, 220, 180),
+        TextColor3 = TEXT_GREY,
         TextSize = FONT_TOGGLE,
         TextXAlignment = Enum.TextXAlignment.Left,
         ZIndex = 7,
@@ -1898,7 +1939,7 @@ local function CreateToggle(parent, labelText, enabledKey, callback, order)
     local toggleBg = Create("Frame", {
         Size = UDim2.new(0, TOGGLE_W, 0, TOGGLE_H2),
         Position = UDim2.new(1, -(TOGGLE_W + 8), 0.5, -TOGGLE_H2/2),
-        BackgroundColor3 = isOn and PINK or Color3.fromRGB(55, 22, 5),
+        BackgroundColor3 = isOn and GREY or GREY_DARK,
         ZIndex = 7,
         Parent = row
     }, {Create("UICorner", {CornerRadius=UDim.new(1,0)})})
@@ -1906,7 +1947,7 @@ local function CreateToggle(parent, labelText, enabledKey, callback, order)
     local toggleDot = Create("Frame", {
         Size = UDim2.new(0, DOT_S, 0, DOT_S),
         Position = isOn and UDim2.new(1,-(DOT_S+3),0.5,-DOT_S/2) or UDim2.new(0,3,0.5,-DOT_S/2),
-        BackgroundColor3 = Color3.new(1,1,1),
+        BackgroundColor3 = TEXT_WHITE,
         ZIndex = 8,
         Parent = toggleBg
     }, {Create("UICorner", {CornerRadius=UDim.new(1,0)})})
@@ -1921,7 +1962,7 @@ local function CreateToggle(parent, labelText, enabledKey, callback, order)
 
     local function setVisual(state, skipCb)
         isOn = state
-        TweenService:Create(toggleBg, TweenInfo.new(0.25), {BackgroundColor3 = isOn and PINK or Color3.fromRGB(50,15,32)}):Play()
+        TweenService:Create(toggleBg, TweenInfo.new(0.25), {BackgroundColor3 = isOn and GREY or GREY_DARK}):Play()
         TweenService:Create(toggleDot, TweenInfo.new(0.25, Enum.EasingStyle.Back), {
             Position = isOn and UDim2.new(1,-(DOT_S+3),0.5,-DOT_S/2) or UDim2.new(0,3,0.5,-DOT_S/2)
         }):Play()
@@ -1941,7 +1982,7 @@ end
 
 local function CreateSlider(parent, labelText, minVal, maxVal, valueKey, callback, order, isFloat)
     local container = Create("Frame", {
-        BackgroundColor3 = Color3.fromRGB(22, 9, 2),
+        BackgroundColor3 = BG_MID,
         Size = UDim2.new(1, -4, 0, SLIDER_H),
         LayoutOrder = order or 0,
         BorderSizePixel = 0,
@@ -1949,7 +1990,7 @@ local function CreateSlider(parent, labelText, minVal, maxVal, valueKey, callbac
         Parent = parent
     }, {
         Create("UICorner", {CornerRadius=UDim.new(0,8)}),
-        Create("UIStroke", {Color=PINK_DARK, Thickness=1.5})
+        Create("UIStroke", {Color=GREY_DARK, Thickness=1.5})
     })
 
     local displayVal = isFloat and string.format("%.1f", Values[valueKey]) or tostring(Values[valueKey])
@@ -1960,7 +2001,7 @@ local function CreateSlider(parent, labelText, minVal, maxVal, valueKey, callbac
         Position = UDim2.new(0, 8, 0, 4),
         Font = Enum.Font.GothamBold,
         Text = labelText .. ": " .. displayVal,
-        TextColor3 = Color3.fromRGB(255, 200, 150),
+        TextColor3 = TEXT_GREY,
         TextSize = FONT_SLIDER,
         TextXAlignment = Enum.TextXAlignment.Left,
         ZIndex = 7,
@@ -1968,7 +2009,7 @@ local function CreateSlider(parent, labelText, minVal, maxVal, valueKey, callbac
     })
 
     local sliderBg = Create("Frame", {
-        BackgroundColor3 = Color3.fromRGB(22, 9, 2),
+        BackgroundColor3 = BG_DARK,
         Position = UDim2.new(0, 8, 0, 24),
         Size = UDim2.new(1, -16, 0, 10),
         ZIndex = 7,
@@ -1978,21 +2019,21 @@ local function CreateSlider(parent, labelText, minVal, maxVal, valueKey, callbac
     local pct = math.clamp((Values[valueKey] - minVal) / (maxVal - minVal), 0, 1)
 
     local fill = Create("Frame", {
-        BackgroundColor3 = PINK,
+        BackgroundColor3 = GREY,
         Size = UDim2.new(pct, 0, 1, 0),
         ZIndex = 8,
         Parent = sliderBg
     }, {Create("UICorner", {CornerRadius=UDim.new(1,0)})})
 
     local knob = Create("Frame", {
-        BackgroundColor3 = Color3.new(1,1,1),
+        BackgroundColor3 = TEXT_WHITE,
         Size = UDim2.new(0, 12, 0, 12),
         Position = UDim2.new(pct, -6, 0.5, -6),
         ZIndex = 9,
         Parent = sliderBg
     }, {
         Create("UICorner", {CornerRadius=UDim.new(1,0)}),
-        Create("UIStroke", {Color=PINK, Thickness=2})
+        Create("UIStroke", {Color=GREY, Thickness=2})
     })
 
     local sliderBtn = Create("TextButton", {
@@ -2036,7 +2077,7 @@ end
 -- Bind button
 local function CreateBindButton(parent, label, bindKey, order)
     local row = Create("Frame", {
-        BackgroundColor3 = Color3.fromRGB(22, 9, 2),
+        BackgroundColor3 = BG_MID,
         Size = UDim2.new(1, -4, 0, TOGGLE_H),
         LayoutOrder = order,
         BorderSizePixel = 0,
@@ -2044,7 +2085,7 @@ local function CreateBindButton(parent, label, bindKey, order)
         Parent = parent
     }, {
         Create("UICorner", {CornerRadius=UDim.new(0,8)}),
-        Create("UIStroke", {Color=PINK_DARK, Thickness=1.5})
+        Create("UIStroke", {Color=GREY_DARK, Thickness=1.5})
     })
 
     Create("TextLabel", {
@@ -2053,7 +2094,7 @@ local function CreateBindButton(parent, label, bindKey, order)
         Position = UDim2.new(0, 8, 0, 0),
         Font = Enum.Font.GothamBold,
         Text = label,
-        TextColor3 = Color3.fromRGB(255, 220, 180),
+        TextColor3 = TEXT_GREY,
         TextSize = FONT_TOGGLE,
         TextXAlignment = Enum.TextXAlignment.Left,
         ZIndex = 7,
@@ -2061,18 +2102,18 @@ local function CreateBindButton(parent, label, bindKey, order)
     })
 
     local btn = Create("TextButton", {
-        BackgroundColor3 = Color3.fromRGB(30, 12, 2),
+        BackgroundColor3 = GREY_DARK,
         Size = UDim2.new(0, 70, 0, 22),
         Position = UDim2.new(1, -78, 0.5, -11),
         Font = Enum.Font.GothamBold,
         Text = tostring(Keybinds[bindKey]):gsub("Enum.KeyCode.", ""),
-        TextColor3 = PINK,
+        TextColor3 = TEXT_WHITE,
         TextSize = 10,
         ZIndex = 7,
         Parent = row
     }, {
         Create("UICorner", {CornerRadius=UDim.new(0,6)}),
-        Create("UIStroke", {Color=PINK_DARK, Thickness=1})
+        Create("UIStroke", {Color=GREY_DARK, Thickness=1})
     })
 
     local isWaiting = false
@@ -2109,7 +2150,7 @@ end
 local pbar = Instance.new("Frame")
 pbar.Size = UDim2.new(0, PBAR_W, 0, 44)
 pbar.Position = UDim2.new(0.5, -PBAR_W/2, 1, -110)
-pbar.BackgroundColor3 = Color3.fromRGB(8, 4, 1)
+pbar.BackgroundColor3 = Color3.fromRGB(8, 8, 8)
 pbar.BorderSizePixel = 0
 pbar.ClipsDescendants = false
 pbar.ZIndex = 10
@@ -2121,11 +2162,11 @@ pStroke.Thickness = 2.5
 pStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 local pGrad = Instance.new("UIGradient", pStroke)
 pGrad.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0,    Color3.fromRGB(255, 130, 0)),
-    ColorSequenceKeypoint.new(0.25, Color3.fromRGB(80,  30,  0)),
-    ColorSequenceKeypoint.new(0.5,  Color3.fromRGB(255, 100, 0)),
-    ColorSequenceKeypoint.new(0.75, Color3.fromRGB(60,  20,  0)),
-    ColorSequenceKeypoint.new(1,    Color3.fromRGB(255, 130, 0)),
+    ColorSequenceKeypoint.new(0,    Color3.fromRGB(128, 128, 128)),
+    ColorSequenceKeypoint.new(0.25, Color3.fromRGB(60, 60, 60)),
+    ColorSequenceKeypoint.new(0.5,  Color3.fromRGB(180, 180, 180)),
+    ColorSequenceKeypoint.new(0.75, Color3.fromRGB(50, 50, 50)),
+    ColorSequenceKeypoint.new(1,    Color3.fromRGB(128, 128, 128)),
 })
 task.spawn(function()
     local r = 0
@@ -2141,7 +2182,7 @@ ProgressLabel.Size = UDim2.new(0.55, 0, 1, 0)
 ProgressLabel.Position = UDim2.new(0, 14, 0, 0)
 ProgressLabel.BackgroundTransparency = 1
 ProgressLabel.Text = "READY"
-ProgressLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+ProgressLabel.TextColor3 = TEXT_WHITE
 ProgressLabel.Font = Enum.Font.GothamBold
 ProgressLabel.TextSize = 14
 ProgressLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -2152,7 +2193,7 @@ ProgressPercentLabel.Size = UDim2.new(0.4, 0, 1, 0)
 ProgressPercentLabel.Position = UDim2.new(0.3, 0, 0, 0)
 ProgressPercentLabel.BackgroundTransparency = 1
 ProgressPercentLabel.Text = ""
-ProgressPercentLabel.TextColor3 = Color3.fromRGB(255, 160, 40)
+ProgressPercentLabel.TextColor3 = GREY_LIGHT
 ProgressPercentLabel.Font = Enum.Font.GothamBlack
 ProgressPercentLabel.TextSize = 13
 ProgressPercentLabel.TextXAlignment = Enum.TextXAlignment.Center
@@ -2163,7 +2204,7 @@ statRadius.Size = UDim2.new(0, 38, 1, 0)
 statRadius.Position = UDim2.new(1, -44, 0, 0)
 statRadius.BackgroundTransparency = 1
 statRadius.Text = tostring(Values.STEAL_RADIUS)
-statRadius.TextColor3 = Color3.fromRGB(255, 140, 40)
+statRadius.TextColor3 = GREY
 statRadius.Font = Enum.Font.GothamBold
 statRadius.TextSize = 13
 statRadius.TextXAlignment = Enum.TextXAlignment.Right
@@ -2172,14 +2213,14 @@ statRadius.ZIndex = 12
 local pTrack = Instance.new("Frame", pbar)
 pTrack.Size = UDim2.new(1, -16, 0, 4)
 pTrack.Position = UDim2.new(0, 8, 1, -7)
-pTrack.BackgroundColor3 = Color3.fromRGB(25, 12, 2)
+pTrack.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 pTrack.BorderSizePixel = 0
 pTrack.ZIndex = 11
 Instance.new("UICorner", pTrack).CornerRadius = UDim.new(1, 0)
 
 ProgressBarFill = Instance.new("Frame", pTrack)
 ProgressBarFill.Size = UDim2.new(0, 0, 1, 0)
-ProgressBarFill.BackgroundColor3 = Color3.fromRGB(255, 120, 0)
+ProgressBarFill.BackgroundColor3 = GREY
 ProgressBarFill.BorderSizePixel = 0
 ProgressBarFill.ZIndex = 12
 Instance.new("UICorner", ProgressBarFill).CornerRadius = UDim.new(1, 0)
@@ -2309,7 +2350,7 @@ end, order) order += 1
 -- VISUAL & MISC SECTION
 CreateSection(ScrollFrame, "✨  VISUAL & MISC", order) order += 1
 
-CreateToggle(ScrollFrame, "🌙 Orange Moon", "Vibrance", function(s)
+CreateToggle(ScrollFrame, "🌙 Grey Mode", "Vibrance", function(s)
     Enabled.Vibrance = s
     if s then enablePinkMoon() else disablePinkMoon() end
 end, order) order += 1
@@ -2319,7 +2360,7 @@ CreateToggle(ScrollFrame, "Optimizer + XRay", "OptimizerXRay", function(s)
     if s then enableOptimizer() enableXRay() else disableOptimizer() disableXRay() end
 end, order) order += 1
 
--- CUSTOM SECTION (без настроек цвета)
+-- CUSTOM SECTION
 CreateSection(ScrollFrame, "🎭  CUSTOM", order) order += 1
 
 CreateToggle(ScrollFrame, "🧟 Zombie Walk (R15)", "ZombieAnim", function(s)
@@ -2374,6 +2415,7 @@ CreateBindButton(ScrollFrame, "Auto Right", "AUTORIGHT", order) order += 1
 CreateBindButton(ScrollFrame, "Auto Left", "AUTOLEFT", order) order += 1
 CreateBindButton(ScrollFrame, "Bat Aimbot", "BATAIMBOT", order) order += 1
 CreateBindButton(ScrollFrame, "Platform Z", "PLATFORM", order) order += 1
+CreateBindButton(ScrollFrame, "Droop", "DROP", order) order += 1
 
 -- ============================================================
 -- PLATFORM Z SIDE PANEL
@@ -2381,7 +2423,7 @@ CreateBindButton(ScrollFrame, "Platform Z", "PLATFORM", order) order += 1
 local pOrder = 1
 
 local platformToggleRow = Create("Frame", {
-    BackgroundColor3 = Color3.fromRGB(22, 9, 2),
+    BackgroundColor3 = BG_MID,
     Size = UDim2.new(1, -4, 0, 32),
     LayoutOrder = pOrder,
     BorderSizePixel = 0,
@@ -2389,7 +2431,7 @@ local platformToggleRow = Create("Frame", {
     Parent = PlatformScroll
 }, {
     Create("UICorner", {CornerRadius=UDim.new(0,8)}),
-    Create("UIStroke", {Color=PINK_DARK, Thickness=1.5})
+    Create("UIStroke", {Color=GREY_DARK, Thickness=1.5})
 })
 pOrder += 1
 
@@ -2399,7 +2441,7 @@ Create("TextLabel", {
     Position = UDim2.new(0, 8, 0, 0),
     Font = Enum.Font.GothamBold,
     Text = "Platform [" .. tostring(Keybinds.PLATFORM):gsub("Enum.KeyCode.", "") .. "]",
-    TextColor3 = Color3.fromRGB(255, 220, 180),
+    TextColor3 = TEXT_GREY,
     TextSize = FONT_TOGGLE,
     TextXAlignment = Enum.TextXAlignment.Left,
     ZIndex = 9,
@@ -2410,7 +2452,7 @@ local platIsOn = false
 local platToggleBg = Create("Frame", {
     Size = UDim2.new(0, TOGGLE_W, 0, TOGGLE_H2),
     Position = UDim2.new(1, -(TOGGLE_W + 8), 0.5, -TOGGLE_H2/2),
-    BackgroundColor3 = Color3.fromRGB(55, 22, 5),
+    BackgroundColor3 = GREY_DARK,
     ZIndex = 9,
     Parent = platformToggleRow
 }, {Create("UICorner", {CornerRadius=UDim.new(1,0)})})
@@ -2418,7 +2460,7 @@ local platToggleBg = Create("Frame", {
 local platToggleDot = Create("Frame", {
     Size = UDim2.new(0, DOT_S, 0, DOT_S),
     Position = UDim2.new(0, 3, 0.5, -DOT_S/2),
-    BackgroundColor3 = Color3.new(1,1,1),
+    BackgroundColor3 = TEXT_WHITE,
     ZIndex = 10,
     Parent = platToggleBg
 }, {Create("UICorner", {CornerRadius=UDim.new(1,0)})})
@@ -2434,7 +2476,7 @@ local platBtn = Create("TextButton", {
 local function setPlatformVisual(state, skipCb)
     platIsOn = state
     TweenService:Create(platToggleBg, TweenInfo.new(0.25), {
-        BackgroundColor3 = platIsOn and PINK or Color3.fromRGB(50,15,32)
+        BackgroundColor3 = platIsOn and GREY or GREY_DARK
     }):Play()
     TweenService:Create(platToggleDot, TweenInfo.new(0.25, Enum.EasingStyle.Back), {
         Position = platIsOn and UDim2.new(1,-(DOT_S+3),0.5,-DOT_S/2) or UDim2.new(0,3,0.5,-DOT_S/2)
@@ -2452,7 +2494,7 @@ end)
 
 local function CreatePlatformSlider(labelText, minVal, maxVal, valueKey, callback, ord, isFloat)
     local container = Create("Frame", {
-        BackgroundColor3 = Color3.fromRGB(22, 9, 2),
+        BackgroundColor3 = BG_MID,
         Size = UDim2.new(1, -4, 0, SLIDER_H),
         LayoutOrder = ord or 0,
         BorderSizePixel = 0,
@@ -2460,7 +2502,7 @@ local function CreatePlatformSlider(labelText, minVal, maxVal, valueKey, callbac
         Parent = PlatformScroll
     }, {
         Create("UICorner", {CornerRadius=UDim.new(0,8)}),
-        Create("UIStroke", {Color=PINK_DARK, Thickness=1.5})
+        Create("UIStroke", {Color=GREY_DARK, Thickness=1.5})
     })
 
     local displayVal = isFloat and string.format("%.1f", Values[valueKey]) or tostring(Values[valueKey])
@@ -2471,7 +2513,7 @@ local function CreatePlatformSlider(labelText, minVal, maxVal, valueKey, callbac
         Position = UDim2.new(0, 8, 0, 4),
         Font = Enum.Font.GothamBold,
         Text = labelText .. ": " .. displayVal,
-        TextColor3 = Color3.fromRGB(255, 200, 150),
+        TextColor3 = TEXT_GREY,
         TextSize = FONT_SLIDER,
         TextXAlignment = Enum.TextXAlignment.Left,
         ZIndex = 9,
@@ -2479,7 +2521,7 @@ local function CreatePlatformSlider(labelText, minVal, maxVal, valueKey, callbac
     })
 
     local sliderBg = Create("Frame", {
-        BackgroundColor3 = Color3.fromRGB(22, 9, 2),
+        BackgroundColor3 = BG_DARK,
         Position = UDim2.new(0, 8, 0, 24),
         Size = UDim2.new(1, -16, 0, 10),
         ZIndex = 9,
@@ -2489,21 +2531,21 @@ local function CreatePlatformSlider(labelText, minVal, maxVal, valueKey, callbac
     local pct = math.clamp((Values[valueKey] - minVal) / (maxVal - minVal), 0, 1)
 
     local fill = Create("Frame", {
-        BackgroundColor3 = PINK,
+        BackgroundColor3 = GREY,
         Size = UDim2.new(pct, 0, 1, 0),
         ZIndex = 10,
         Parent = sliderBg
     }, {Create("UICorner", {CornerRadius=UDim.new(1,0)})})
 
     local knob = Create("Frame", {
-        BackgroundColor3 = Color3.new(1,1,1),
+        BackgroundColor3 = TEXT_WHITE,
         Size = UDim2.new(0, 12, 0, 12),
         Position = UDim2.new(pct, -6, 0.5, -6),
         ZIndex = 11,
         Parent = sliderBg
     }, {
         Create("UICorner", {CornerRadius=UDim.new(1,0)}),
-        Create("UIStroke", {Color=PINK, Thickness=2})
+        Create("UIStroke", {Color=GREY, Thickness=2})
     })
 
     local sliderBtn = Create("TextButton", {
@@ -2577,39 +2619,39 @@ CreatePlatformSlider("Height Offset", -10, 5, "PlatformHeightOffset", function(v
 end, pOrder) pOrder += 1
 
 local rebuildBtn = Create("TextButton", {
-    BackgroundColor3 = Color3.fromRGB(30, 12, 2),
+    BackgroundColor3 = GREY_DARK,
     Size = UDim2.new(1, -4, 0, 26),
     LayoutOrder = pOrder,
     BorderSizePixel = 0,
     Font = Enum.Font.GothamBold,
     Text = "↺  Rebuild Here",
-    TextColor3 = PINK,
+    TextColor3 = TEXT_WHITE,
     TextSize = 10,
     ZIndex = 9,
     Parent = PlatformScroll
 }, {
     Create("UICorner", {CornerRadius=UDim.new(0,8)}),
-    Create("UIStroke", {Color=PINK_DARK, Thickness=1.5})
+    Create("UIStroke", {Color=GREY_DARK, Thickness=1.5})
 })
 pOrder += 1
 
 rebuildBtn.MouseButton1Click:Connect(function()
     if platIsOn then
         createPlatformZ()
-        TweenService:Create(rebuildBtn, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(60, 25, 3)}):Play()
+        TweenService:Create(rebuildBtn, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(40, 40, 40)}):Play()
         task.wait(0.15)
-        TweenService:Create(rebuildBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(30, 12, 2)}):Play()
+        TweenService:Create(rebuildBtn, TweenInfo.new(0.2), {BackgroundColor3 = GREY_DARK}):Play()
     end
 end)
 
 -- ============================================================
--- FLOATING BUTTONS (unchanged)
+-- FLOATING BUTTONS (including DROOP)
 -- ============================================================
 local floatBtnUpdateRight, floatBtnUpdateLeft, floatBtnUpdateFloat, floatBtnUpdateAimbot
 
 local function CreateFloatingButton(labelText, icon, defaultPos, enabledKey, onToggle)
     local btnFrame = Create("Frame", {
-        BackgroundColor3 = Color3.fromRGB(18, 7, 2),
+        BackgroundColor3 = BG_MID,
         Position = defaultPos,
         Size = UDim2.new(0, 130, 0, 36),
         BorderSizePixel = 0,
@@ -2617,18 +2659,18 @@ local function CreateFloatingButton(labelText, icon, defaultPos, enabledKey, onT
         Parent = ScreenGui
     }, {
         Create("UICorner", {CornerRadius = UDim.new(0, 12)}),
-        Create("UIStroke", {Color = PINK, Thickness = 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border}),
+        Create("UIStroke", {Color = GREY, Thickness = 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border}),
         Create("UIGradient", {
             Color = ColorSequence.new{
-                ColorSequenceKeypoint.new(0, Color3.fromRGB(35, 13, 3)),
-                ColorSequenceKeypoint.new(1, Color3.fromRGB(18, 7, 1))
+                ColorSequenceKeypoint.new(0, Color3.fromRGB(30, 30, 30)),
+                ColorSequenceKeypoint.new(1, Color3.fromRGB(15, 15, 15))
             },
             Rotation = 90
         })
     })
 
     local glowFrame = Create("Frame", {
-        BackgroundColor3 = PINK,
+        BackgroundColor3 = GREY,
         BackgroundTransparency = 0.85,
         Size = UDim2.new(1, 6, 1, 6),
         Position = UDim2.new(0, -3, 0, -3),
@@ -2643,7 +2685,7 @@ local function CreateFloatingButton(labelText, icon, defaultPos, enabledKey, onT
         Size = UDim2.new(0, 26, 1, 0),
         Font = Enum.Font.GothamBold,
         Text = icon,
-        TextColor3 = PINK,
+        TextColor3 = GREY,
         TextSize = 15,
         ZIndex = 22,
         Parent = btnFrame
@@ -2655,7 +2697,7 @@ local function CreateFloatingButton(labelText, icon, defaultPos, enabledKey, onT
         Size = UDim2.new(1, -50, 1, 0),
         Font = Enum.Font.GothamBold,
         Text = labelText,
-        TextColor3 = Color3.fromRGB(255, 220, 180),
+        TextColor3 = TEXT_GREY,
         TextSize = 10,
         TextXAlignment = Enum.TextXAlignment.Left,
         ZIndex = 22,
@@ -2679,13 +2721,13 @@ local function CreateFloatingButton(labelText, icon, defaultPos, enabledKey, onT
             BackgroundColor3 = state and Color3.fromRGB(0, 255, 100) or Color3.fromRGB(80, 80, 80)
         }):Play()
         TweenService:Create(btnFrame, TweenInfo.new(0.2), {
-            BackgroundColor3 = state and Color3.fromRGB(50, 20, 3) or Color3.fromRGB(18, 7, 2)
+            BackgroundColor3 = state and Color3.fromRGB(40, 40, 40) or BG_MID
         }):Play()
         TweenService:Create(glowFrame, TweenInfo.new(0.2), {
             BackgroundTransparency = state and 0.6 or 0.85
         }):Play()
         TweenService:Create(textLabel, TweenInfo.new(0.2), {
-            TextColor3 = state and PINK or Color3.fromRGB(255, 220, 180)
+            TextColor3 = state and GREY or TEXT_GREY
         }):Play()
     end
 
@@ -2742,6 +2784,108 @@ local function CreateFloatingButton(labelText, icon, defaultPos, enabledKey, onT
     return updateVisual, btnFrame
 end
 
+-- Отдельная кнопка для DROOP (без состояния, просто действие)
+local function CreateActionFloatingButton(labelText, icon, defaultPos, action)
+    local btnFrame = Create("Frame", {
+        BackgroundColor3 = BG_MID,
+        Position = defaultPos,
+        Size = UDim2.new(0, 110, 0, 36),
+        BorderSizePixel = 0,
+        ZIndex = 20,
+        Parent = ScreenGui
+    }, {
+        Create("UICorner", {CornerRadius = UDim.new(0, 12)}),
+        Create("UIStroke", {Color = GREY, Thickness = 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border}),
+        Create("UIGradient", {
+            Color = ColorSequence.new{
+                ColorSequenceKeypoint.new(0, Color3.fromRGB(30, 30, 30)),
+                ColorSequenceKeypoint.new(1, Color3.fromRGB(15, 15, 15))
+            },
+            Rotation = 90
+        })
+    })
+
+    local glowFrame = Create("Frame", {
+        BackgroundColor3 = GREY,
+        BackgroundTransparency = 0.85,
+        Size = UDim2.new(1, 6, 1, 6),
+        Position = UDim2.new(0, -3, 0, -3),
+        BorderSizePixel = 0,
+        ZIndex = 19,
+        Parent = btnFrame
+    }, {Create("UICorner", {CornerRadius = UDim.new(0, 14)})})
+
+    Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 8, 0, 0),
+        Size = UDim2.new(0, 26, 1, 0),
+        Font = Enum.Font.GothamBold,
+        Text = icon,
+        TextColor3 = GREY,
+        TextSize = 15,
+        ZIndex = 22,
+        Parent = btnFrame
+    })
+
+    local textLabel = Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 36, 0, 0),
+        Size = UDim2.new(1, -50, 1, 0),
+        Font = Enum.Font.GothamBold,
+        Text = labelText,
+        TextColor3 = TEXT_GREY,
+        TextSize = 10,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ZIndex = 22,
+        Parent = btnFrame
+    })
+
+    local clickBtn = Create("TextButton", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 1, 0),
+        Text = "",
+        ZIndex = 23,
+        Parent = btnFrame
+    })
+
+    local fDragging, fDragStart, fStartPos, fMoved = false, nil, nil, false
+    clickBtn.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            fDragging = true
+            fMoved = false
+            fDragStart = input.Position
+            fStartPos = btnFrame.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then fDragging = false end
+            end)
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if fDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - fDragStart
+            if delta.Magnitude > 5 then
+                fMoved = true
+                btnFrame.Position = UDim2.new(fStartPos.X.Scale, fStartPos.X.Offset + delta.X, fStartPos.Y.Scale, fStartPos.Y.Offset + delta.Y)
+            end
+        end
+    end)
+
+    clickBtn.MouseButton1Click:Connect(function()
+        if fMoved then return end
+        action()
+        -- анимация нажатия
+        TweenService:Create(btnFrame, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(60, 60, 60)}):Play()
+        task.wait(0.1)
+        TweenService:Create(btnFrame, TweenInfo.new(0.1), {BackgroundColor3 = BG_MID}):Play()
+        TweenService:Create(glowFrame, TweenInfo.new(0.2), {BackgroundTransparency = 0.5}):Play()
+        task.wait(0.2)
+        TweenService:Create(glowFrame, TweenInfo.new(0.2), {BackgroundTransparency = 0.85}):Play()
+    end)
+
+    return btnFrame
+end
+
+-- Создаём плавающие кнопки
 floatBtnUpdateRight, _ = CreateFloatingButton(
     "Auto Right [" .. tostring(Keybinds.AUTORIGHT):gsub("Enum.KeyCode.", "") .. "]", "➡",
     UDim2.new(1, -144, 0.5, -64),
@@ -2798,6 +2942,9 @@ floatBtnUpdateAimbot, _ = CreateFloatingButton(
     end
 )
 
+-- Кнопка DROOP (плавающая, без состояния)
+CreateActionFloatingButton("Droop", "💧", UDim2.new(1, -144, 0.5, 104), performDrop)
+
 -- ============================================================
 -- LOAD CONFIG AND START FEATURES
 -- ============================================================
@@ -2838,7 +2985,7 @@ if Enabled.PlatformZ then
 end
 
 -- ============================================================
--- KEYBINDS HANDLING (dynamic)
+-- KEYBINDS HANDLING
 -- ============================================================
 UserInputService.InputBegan:Connect(function(input, gpe)
     if gpe then return end
@@ -2849,7 +2996,7 @@ UserInputService.InputBegan:Connect(function(input, gpe)
         uiVisible = not uiVisible
         MainContainer.Visible = uiVisible
         TweenService:Create(chCircle, TweenInfo.new(0.2), {
-            BackgroundColor3 = uiVisible and Color3.fromRGB(20, 8, 1) or Color3.fromRGB(50, 20, 2)
+            BackgroundColor3 = uiVisible and Color3.fromRGB(15, 15, 15) or Color3.fromRGB(30, 30, 30)
         }):Play()
     elseif input.KeyCode == Keybinds.SPEED then
         Enabled.SpeedBoost = not Enabled.SpeedBoost
@@ -2899,6 +3046,8 @@ UserInputService.InputBegan:Connect(function(input, gpe)
         Enabled.PlatformZ = platIsOn
         setPlatformVisual(platIsOn)
         saveConfig()
+    elseif input.KeyCode == Keybinds.DROP then
+        performDrop()
     end
 end)
 
