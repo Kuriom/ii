@@ -1,6 +1,7 @@
 --[[
-    Asix Hub - Fixed Gravity Bind (T)
+    Asix Hub - Fixed Gravity Bind (T) & DROP (Fly + Fall)
     Bind key for Gravity Mode added and working.
+    DROP: fly up, hover, then slam down.
 --]]
 local CoreGui = game:GetService("CoreGui")
 local Players = game:GetService("Players")
@@ -81,7 +82,7 @@ local Values = {
     ESPTransparency      = 0.5,
 }
 
--- Default keybinds (GRAVITY добавлен)
+-- Default keybinds (GRAVITY added)
 local DefaultKeybinds = {
     SPEED     = Enum.KeyCode.V,
     FLOAT     = Enum.KeyCode.F,
@@ -90,7 +91,7 @@ local DefaultKeybinds = {
     BATAIMBOT = Enum.KeyCode.X,
     PLATFORM  = Enum.KeyCode.R,
     DROP      = Enum.KeyCode.C,
-    GRAVITY   = Enum.KeyCode.T,   -- <--- Gravity bind
+    GRAVITY   = Enum.KeyCode.T,
 }
 
 local Keybinds = {}
@@ -155,21 +156,32 @@ local function loadConfig()
 end
 
 -- ============================================================
--- DROP FUNCTION
+-- DROP FUNCTION (FLY + FALL)
 -- ============================================================
 local function performDrop()
     local char = Player.Character
     if not char then return end
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
-    local gravity = workspace.Gravity
-    local targetHeight = 2
-    local requiredVel = math.sqrt(2 * gravity * targetHeight)
-    hrp.AssemblyLinearVelocity = Vector3.new(
-        hrp.AssemblyLinearVelocity.X,
-        requiredVel,
-        hrp.AssemblyLinearVelocity.Z
-    )
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+
+    -- Сохраняем текущую горизонтальную скорость
+    local originalVel = hrp.AssemblyLinearVelocity
+    local horizVel = Vector3.new(originalVel.X, 0, originalVel.Z)
+
+    -- 1) Взлёт вверх
+    hrp.AssemblyLinearVelocity = Vector3.new(horizVel.X, 55, horizVel.Z)
+
+    -- 2) Через 0.8 секунды – зависание (обнуляем вертикаль, горизонталь тоже обнуляем для эффекта)
+    task.wait(0.8)
+    hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+
+    -- 3) Ещё через 0.05 секунды – резкое падение вниз
+    task.wait(0.05)
+    hrp.AssemblyLinearVelocity = Vector3.new(0, -65, 0)
+
+    -- Billboard с текстом (обратная связь)
     local billboard = Instance.new("BillboardGui")
     billboard.Size = UDim2.new(0, 100, 0, 30)
     billboard.StudsOffset = Vector3.new(0, 2, 0)
@@ -2072,7 +2084,7 @@ CreateBindButton(ScrollFrame, "Auto Left", "AUTOLEFT", order) order += 1
 CreateBindButton(ScrollFrame, "Bat Aimbot", "BATAIMBOT", order) order += 1
 CreateBindButton(ScrollFrame, "Platform Z", "PLATFORM", order) order += 1
 CreateBindButton(ScrollFrame, "Droop", "DROP", order) order += 1
-CreateBindButton(ScrollFrame, "Gravity Mode", "GRAVITY", order) order += 1   -- <--- Gravity bind button
+CreateBindButton(ScrollFrame, "Gravity Mode", "GRAVITY", order) order += 1
 
 -- ============================================================
 -- PLATFORM Z SIDE PANEL (упрощённо)
@@ -2521,7 +2533,7 @@ end
 if Enabled.PlatformZ then createPlatformZ() end
 
 -- ============================================================
--- KEYBINDS HANDLING (включая GRAVITY)
+-- KEYBINDS HANDLING (включая GRAVITY и DROP)
 -- ============================================================
 UserInputService.InputBegan:Connect(function(input, gpe)
     if gpe then return end
@@ -2584,7 +2596,7 @@ UserInputService.InputBegan:Connect(function(input, gpe)
         saveConfig()
     elseif input.KeyCode == Keybinds.DROP then
         performDrop()
-    elseif input.KeyCode == Keybinds.GRAVITY then   -- Gravity bind
+    elseif input.KeyCode == Keybinds.GRAVITY then
         Enabled.GalaxyMode = not Enabled.GalaxyMode
         if VisualSetters.GalaxyMode then VisualSetters.GalaxyMode(Enabled.GalaxyMode) end
         if Enabled.GalaxyMode then startGalaxyMode() else stopGalaxyMode() end
