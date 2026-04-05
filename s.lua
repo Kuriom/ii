@@ -16,7 +16,7 @@ local Player = Players.LocalPlayer
 -- ============================================================
 -- KEY CHECK
 -- ============================================================
-if getgenv().ASIX_KEY ~= "dane4jagey" then
+if getgenv().ASIX_KEY ~= "сынпиздыданечка" then
     warn("Invalid key. Use: _G.ASIX_KEY = '67' before loading the script.")
     return
 end
